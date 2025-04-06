@@ -1,4 +1,4 @@
-name: Production - Build and Publish Langfuse Docker Images
+name: CICD
 
 on:
   workflow_dispatch:
