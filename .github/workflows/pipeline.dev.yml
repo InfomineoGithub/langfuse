@@ -44,19 +44,6 @@ jobs:
           driver-opts: network=host
       
       # build web
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta-web
-        uses: docker/metadata-action@v4
-        with:
-          images: |
-            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.STAGE_GCP_PROJECT_ID }}/brain-langfuse-web/langfuse:latest
-          flavor: |
-            latest=false
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, '-rc') }}
-            type=semver,pattern={{major}},enable=${{ !contains(github.ref, '-rc') }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v3') && !contains(github.ref, '-rc') }}
       - name: Build and push Docker image (web)
         uses: docker/build-push-action@v4
         with:
@@ -64,7 +51,6 @@ jobs:
           file: ./web/Dockerfile
           push: true
           tags: |
-            ${{ steps.meta-web.outputs.tags }}
             ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.STAGE_GCP_PROJECT_ID }}/brain-langfuse-web/langfuse:latest
           labels: ${{ steps.meta-web.outputs.labels }}
           platforms: |
@@ -72,19 +58,6 @@ jobs:
             ${{ startsWith(github.ref, 'refs/tags/') && 'linux/arm64' || '' }}
       
       # build worker
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta-worker
-        uses: docker/metadata-action@v4
-        with:
-          images: |
-            ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.STAGE_GCP_PROJECT_ID }}/brain-langfuse-worker/langfuse-worker:latest
-          flavor: |
-            latest=false
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, '-rc') }}
-            type=semver,pattern={{major}},enable=${{ !contains(github.ref, '-rc') }}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v3') && !contains(github.ref, '-rc') }}
       - name: Build and push Docker image (worker)
         uses: docker/build-push-action@v4
         with:
@@ -92,7 +65,6 @@ jobs:
           file: ./worker/Dockerfile
           push: true
           tags: |
-            ${{ steps.meta-worker.outputs.tags }}
             ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.STAGE_GCP_PROJECT_ID }}/brain-langfuse-worker/langfuse-worker:latest
           labels: ${{ steps.meta-worker.outputs.labels }}
           platforms: |
