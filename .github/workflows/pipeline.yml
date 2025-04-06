@@ -1,16 +1,7 @@
-name: CI/CD
+name: Production - Build and Publish Langfuse Docker Images
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "main"
-    tags:
-      - "v*"
-  merge_group:
-  pull_request:
-    branches:
-      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
