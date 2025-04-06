@@ -56,9 +56,6 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, '-rc') }}
-            type=semver,pattern={{major}},enable=${{ !contains(github.ref, '-rc') }}
       - name: Build and push Docker image (web)
         uses: docker/build-push-action@v4
         with:
@@ -86,9 +83,6 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, '-rc') }}
-            type=semver,pattern={{major}},enable=${{ !contains(github.ref, '-rc') }}
       - name: Build and push Docker image (worker)
         uses: docker/build-push-action@v4
         with:
