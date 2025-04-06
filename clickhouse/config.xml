@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<yandex>
+    <!-- Other configurations -->
+
+    <!-- Listen on all network interfaces -->
+    <listen_host>::</listen_host>
+
+    <!-- Other configurations -->
+</yandex>

@@ -10,10 +10,15 @@ migrate
 /coverage
 /certs/
 
+# docker compose 
+chat_application.yaml
+
 # database
 /prisma/db.sqlite
 /prisma/db.sqlite-journal
 
+# clickhouse 
+/clickhouse/users.xml
 # next.js
 /.next/
 /out/
