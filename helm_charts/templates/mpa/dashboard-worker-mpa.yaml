@@ -1,0 +1,34 @@
+apiVersion: autoscaling.gke.io/v1beta1
+kind: MultidimPodAutoscaler
+metadata:
+  name: dashboard-worker-mpa
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dashboard-worker
+  goals:
+    metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.dashboardWorker.targetCPUUtilizationPercentage }}
+  constraints:
+    global:
+      minReplicas: {{ .Values.autoscaling.dashboardWorker.minReplicas }}
+      maxReplicas: {{ .Values.autoscaling.dashboardWorker.maxReplicas }}
+    containerControlledResources: [ memory ]
+    container:
+    - name: '*'
+      requests:
+        minAllowed:
+          cpu: {{ .Values.dashboardWorker.resources.requests.cpu }}
+          memory: {{ .Values.dashboardWorker.resources.requests.memory }}
+        maxAllowed:
+          cpu: {{ .Values.dashboardWorker.resources.limits.cpu }}
+          memory: {{ .Values.dashboardWorker.resources.limits.memory }}
+  policy:
+    updateMode: Auto

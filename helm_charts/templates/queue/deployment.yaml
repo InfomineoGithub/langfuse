@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-queue
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "infomineo-chatbot.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dashboardQueue.replicaCount }}
+  selector:
+    matchLabels:
+      app: dashboard-queue
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app: dashboard-queue
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Values.dashboardQueue.serviceAccountName }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: dashboard-queue
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.dashboardQueue.image.repository }}:{{ .Values.dashboardQueue.image.tag }}"
+          imagePullPolicy: {{ .Values.dashboardQueue.image.pullPolicy }}
+          command: ["redis-server", "--requirepass", {{ .Values.redis.auth | quote }}]
+          ports:
+            {{- range .Values.dashboardQueue.ports }}
+            - name: {{ .name }}
+              containerPort: {{ .containerPort }}
+              protocol: {{ .protocol }}
+            {{- end }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.dashboardQueue.livenessProbe.port }}
+            initialDelaySeconds: {{ .Values.dashboardQueue.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.dashboardQueue.livenessProbe.periodSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.dashboardQueue.readinessProbe.port }}
+            initialDelaySeconds: {{ .Values.dashboardQueue.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.dashboardQueue.readinessProbe.periodSeconds }}
+          resources:
+            {{- toYaml .Values.dashboardQueue.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

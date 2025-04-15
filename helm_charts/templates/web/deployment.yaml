@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-dashboard
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "infomineo-chatbot.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.chatDashboard.enabled }}
+  replicas: {{ .Values.chatDashboard.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: chat-dashboard
+  template:
+    metadata:
+      {{- $podAnnotations := merge (.Values.langfuse.web.pod.annotations | default dict) (.Values.langfuse.pod.annotations | default dict) }}
+      {{- with $podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app: chat-dashboard
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: chat-dashboard-sa
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+     
+      containers:
+        - name: chat-dashboard
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.chatDashboard.image.repository }}:{{ .Values.chatDashboard.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.chatDashboard.image.pullPolicy }}
+          env:
+            {{- range $key, $value := .Values.langfuse.additionalEnv }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: dashboard-secrets
+                  key: {{ $key }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.chatDashboard.containerPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.langfuse.web.livenessProbe.path | default "/api/public/health" }}
+              port: http
+            initialDelaySeconds: {{ .Values.langfuse.web.livenessProbe.initialDelaySeconds | default 20 }}
+            periodSeconds: {{ .Values.langfuse.web.livenessProbe.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.langfuse.web.livenessProbe.timeoutSeconds | default 5 }}
+            successThreshold: {{ .Values.langfuse.web.livenessProbe.successThreshold | default 1 }}
+            failureThreshold: {{ .Values.langfuse.web.livenessProbe.failureThreshold | default 5 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.langfuse.web.readinessProbe.path | default "/api/public/ready" }}
+              port: http
+            initialDelaySeconds: {{ .Values.langfuse.web.readinessProbe.initialDelaySeconds | default 20 }}
+            periodSeconds: {{ .Values.langfuse.web.readinessProbe.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.langfuse.web.readinessProbe.timeoutSeconds | default 5 }}
+            successThreshold: {{ .Values.langfuse.web.readinessProbe.successThreshold | default 1 }}
+            failureThreshold: {{ .Values.langfuse.web.readinessProbe.failureThreshold | default 5 }}
+          resources:
+            {{- toYaml .Values.chatDashboard.resources | nindent 12 }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
