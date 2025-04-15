@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-dashboard-service
+  namespace: {{ .Values.namespace }}
+
+spec:
+  type: {{ .Values.services.chatDashboard.type }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.services.chatDashboard.port }}
+      targetPort: {{ .Values.services.chatDashboard.targetPort }}
+  selector:
+    app: chat-dashboard

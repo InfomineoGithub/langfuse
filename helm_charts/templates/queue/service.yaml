@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-queue
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "infomineo-chatbot.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.dashboardQueue.service.type }}
+  ports:
+    {{- range .Values.dashboardQueue.service.ports }}
+    - port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: {{ .protocol }}
+      name: {{ .name }}
+    {{- end }}
+  selector:
+    app: dashboard-queue

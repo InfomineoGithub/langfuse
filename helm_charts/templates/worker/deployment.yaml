@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "infomineo-chatbot.labels" . | nindent 4 }}
+ 
+spec:
+  {{- if not .Values.autoscaling.dashboardWorker.enabled }}
+  replicas: {{ .Values.dashboardWorker.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: dashboard-worker
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app: dashboard-worker
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: dashboard-worker-sa
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+    
+      containers:
+        - name: dashboard-worker
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.dashboardWorker.image.repository }}:{{ .Values.dashboardWorker.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.dashboardWorker.image.pullPolicy }}
+          env:
+            {{- range $key, $value := .Values.langfuse.additionalEnv }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: dashboard-secrets
+                  key: {{ $key }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.langfuse.worker.port | default 3030 }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: {{ .Values.langfuse.worker.livenessProbe.initialDelaySeconds | default 20 }}
+            periodSeconds: {{ .Values.langfuse.worker.livenessProbe.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.langfuse.worker.livenessProbe.timeoutSeconds | default 5 }}
+            successThreshold: {{ .Values.langfuse.worker.livenessProbe.successThreshold | default 1 }}
+            failureThreshold: {{ .Values.langfuse.worker.livenessProbe.failureThreshold | default 5 }}
+          resources:
+            {{- toYaml .Values.dashboardWorker.resources | nindent 12 }}
+         
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

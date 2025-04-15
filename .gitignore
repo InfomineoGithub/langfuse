@@ -9,6 +9,8 @@
 /coverage
 /certs/
 
+**/*.env
+**/*values.yaml
 # docker compose 
 chat_application.yaml
 
