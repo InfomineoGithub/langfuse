@@ -2,11 +2,8 @@ dependencies:
 - name: clickhouse
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 8.0.5
-- name: valkey
-  repository: oci://registry-1.docker.io/bitnamicharts
-  version: 2.2.4
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 2.30.0
-digest: sha256:2655e9b86383feba3e4a26d4bcf149d5a7ec5a66269ab7e2132b89dfb9aac808
-generated: "2025-04-10T16:23:00.9102676+02:00"
+digest: sha256:9841e94b58decd95ee3b655af594994aa27f8c4d0407f54fea204bf6830c72e1
+generated: "2025-04-16T22:39:02.7763619+02:00"
