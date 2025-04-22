@@ -3,7 +3,8 @@ kind: Service
 metadata:
   name: chat-dashboard-service
   namespace: {{ .Values.namespace }}
-
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
 spec:
   type: {{ .Values.services.chatDashboard.type }}
   ports:
