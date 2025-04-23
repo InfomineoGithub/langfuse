@@ -2,6 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: dashboard
+  namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: |
         europe-west1-docker.pkg.dev/brain-staging-450115/brain-langfuse-web/langfuse
@@ -30,3 +31,22 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true         
+      - RespectIgnoreDifferences=true 
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/volumeClaimTemplates   # skip comparing PVC templates 
+    - group: apps
+      kind: StatefulSet
+      managedFieldsManagers:
+        - kube-controller-manager     # ignore fields managed by controller 
+
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.template.spec.containers[].resources.requests
+        - .spec.template.spec.containers[].resources.limits
+
