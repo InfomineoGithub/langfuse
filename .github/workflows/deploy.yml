@@ -3,6 +3,10 @@ on:
     branches:
       - main
       - production
+    paths:
+      - 'web/**'
+      - 'worker/**'
+
   workflow_dispatch:
     inputs:
       service:
