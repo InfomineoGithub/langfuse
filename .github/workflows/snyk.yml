@@ -3,9 +3,15 @@ on:
   pull_request:
     branches:
       - "**"
+    paths:
+      - 'web/**'
+      - 'worker/**'
   push:
     branches:
       - main
+    paths:
+      - 'web/**'
+      - 'worker/**'
   # Snyk cannot upload results in merge group. Hence, we only run on PRs and when pushingon the main branch https://github.com/github/codeql-action/issues/1572
 
 concurrency:
