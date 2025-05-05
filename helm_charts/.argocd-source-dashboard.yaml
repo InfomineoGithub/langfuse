@@ -1,0 +1,8 @@
+helm:
+  parameters:
+  - name: chatDashboard.image.repository
+    value: europe-west1-docker.pkg.dev/brain-staging-450115/brain-langfuse-web/langfuse
+    forcestring: true
+  - name: chatDashboard.image.tag
+    value: latest@sha256:ae2b0c1c8b91d81a4dd51b8f749091652c769e0497a86d2ea23a961c32ee9d60
+    forcestring: true
