@@ -5,6 +5,8 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "infomineo-chatbot.labels" . | nindent 4 }}
+  annotations:
+    secret.reloader.stakater.com/reload: "dashboard-secrets"
 spec:
   {{- if not .Values.autoscaling.chatDashboard.enabled }}
   replicas: {{ .Values.chatDashboard.replicaCount }}
