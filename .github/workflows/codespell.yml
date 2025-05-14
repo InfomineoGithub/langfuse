@@ -5,11 +5,17 @@ on:
   push:
     branches:
       - "main"
+    paths:
+      - 'web/**'
+      - 'worker/**'
     tags:
       - "v*"
   pull_request:
     branches:
       - "**"
+    paths:
+      - 'web/**'
+      - 'worker/**'
   merge_group:
 
 permissions:

@@ -5,12 +5,18 @@ metadata:
   namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: |
-        europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-web/langfuse
-        europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-worker/langfuse-worker
+        europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-web/langfuse:latest
+        europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-worker/langfuse-worker:latest
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd-image-updater.argoproj.io/write-back-method: git
     argocd-image-updater.argoproj.io/git-branch: main
-    argocd-image-updater.argoproj.io/image-update-strategy: latest
+    argocd-image-updater.argoproj.io/langfuse-web.update-strategy: digest
+    argocd-image-updater.argoproj.io/langfuse-web.helm.image-name: "chatDashboard.image.repository"
+    argocd-image-updater.argoproj.io/langfuse-web.helm.image-tag: "chatDashboard.image.tag"
+    argocd-image-updater.argoproj.io/langfuse-worker.update-strategy: digest
+    argocd-image-updater.argoproj.io/langfuse-worker.helm.image-name: "dashboardWorker.image.repository"
+    argocd-image-updater.argoproj.io/langfuse-worker.helm.image-tag: "dashboardWorker.image.tag"
+
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
