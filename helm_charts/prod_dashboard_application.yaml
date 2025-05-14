@@ -5,8 +5,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: |
-        europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-web/langfuse:latest
-        europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-worker/langfuse-worker:latest
+        langfuse-web=europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-web/langfuse:latest
+        langfuse-worker=europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-worker/langfuse-worker:latest
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd-image-updater.argoproj.io/write-back-method: git
     argocd-image-updater.argoproj.io/git-branch: main
