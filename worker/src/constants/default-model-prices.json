@@ -1849,5 +1849,168 @@
     },
     "tokenizer_config": null,
     "tokenizer_id": null
+  },
+  {
+    "id": "01jykc7ttjf9tzs41zzs41296z",
+    "model_name": "gemini-2.5-pro",
+    "match_pattern": "(?i)^(gemini-2.5-pro)(-preview(-[a-zA-Z0-9-]+)?)?$",
+    "created_at": "2025-06-25T11:05:47.090Z",
+    "updated_at": "2025-06-25T11:05:47.090Z",
+    "prices": {
+      "input": 2.5e-6,
+      "input_tokens": 2.5e-6,
+      "output": 15e-6,
+      "output_tokens": 15e-6,
+      "cache_read_input_tokens": 0.625e-6,
+      "input_cache_read": 0.625e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "01jykc7ttjcfab35n0tbqskrg1",
+    "model_name": "gemini-2.5-flash",
+    "match_pattern": "(?i)^(gemini-2.5-flash)(-preview(-[a-zA-Z0-9-]+)?)?$",
+    "created_at": "2025-06-25T11:05:47.090Z",
+    "updated_at": "2025-06-25T11:05:47.090Z",
+    "prices": {
+      "input": 0.3e-6,
+      "input_tokens": 0.3e-6,
+      "input_audio_tokens": 1e-6,
+      "output": 2.5e-6,
+      "output_tokens": 2.5e-6,
+      "cache_read_input_tokens": 0.075e-6,
+      "input_cache_read": 0.075e-6,
+      "cache_read_input_audio_tokens": 0.25e-6,
+      "input_cached_audio_tokens": 0.25e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "01jykc7ttj8rgg3hq0c6dfj2ee",
+    "model_name": "sonar-reasoning-pro",
+    "match_pattern": "(?i)^(sonar-reasoning-pro)$",
+    "created_at": "2025-06-25T11:05:47.090Z",
+    "updated_at": "2025-06-25T11:05:47.090Z",
+    "prices": {
+      "input": 2e-6,
+      "input_tokens": 2e-6,
+      "output": 8e-6,
+      "output_tokens": 8e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622AP318445NEDXQYBMFA",
+    "model_name": "sonar-deep-research",
+    "match_pattern": "(?i)^(sonar-deep-research)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "input": 2e-6,
+      "input_tokens": 2e-6,
+      "output": 8e-6,
+      "output_tokens": 8e-6,
+      "output_reasoning_tokens": 3e-6,
+      "output_reasoning": 3e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622APW7P4YBB3TEFV27VB",
+    "model_name": "deepseek-chat",
+    "match_pattern": "(?i)^(deepseek-chat)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "cache_read_input_tokens": 0.07e-6,
+      "input_cache_read": 0.07e-6,
+      "input": 0.27e-6,
+      "input_tokens": 0.27e-6,
+      "output": 1.1e-6,
+      "output_tokens": 1.1e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622APWP5Y20PRSB230NA7",
+    "model_name": "deepseek-reasoner",
+    "match_pattern": "(?i)^(deepseek-reasoner)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "cache_read_input_tokens": 0.14e-6,
+      "input_cache_read": 0.14e-6,
+      "input": 0.55e-6,
+      "input_tokens": 0.55e-6,
+      "output": 2.19e-6,
+      "output_tokens": 2.19e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622APFETZXB8E08495N5C",
+    "model_name": "mistral-small-2506",
+    "match_pattern": "(?i)^(mistral-small-2506)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "input": 0.1e-6,
+      "input_tokens": 0.1e-6,
+      "output": 0.3e-6,
+      "output_tokens": 0.3e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622APTXPZZAGXV3CQHSTD",
+    "model_name": "mistral-medium-2505",
+    "match_pattern": "(?i)^(mistral-medium-2505)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "input": 0.4e-6,
+      "input_tokens": 0.4e-6,
+      "output": 2e-6,
+      "output_tokens": 2e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622APF3ZBERJRT41VKF9X",
+    "model_name": "magistral-small-2506",
+    "match_pattern": "(?i)^(magistral-small-2506)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "input": 0.5e-6,
+      "input_tokens": 0.5e-6,
+      "output": 1.5e-6,
+      "output_tokens": 1.5e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
+  },
+  {
+    "id": "0001M622APWFBVARS1G1GX8YV3",
+    "model_name": "magistral-medium-2506",
+    "match_pattern": "(?i)^(magistral-medium-2506)$",
+    "created_at": "2025-06-29T09:37:23.000Z",
+    "updated_at": "2025-06-29T09:37:23.000Z",
+    "prices": {
+      "input": 2e-6,
+      "input_tokens": 2e-6,
+      "output": 5e-6,
+      "output_tokens": 5e-6
+    },
+    "tokenizer_config": null,
+    "tokenizer_id": null
   }
 ]
