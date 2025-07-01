@@ -4,5 +4,5 @@ helm:
     value: europe-west1-docker.pkg.dev/brain-staging-450115/brain-langfuse-web/langfuse
     forcestring: true
   - name: chatDashboard.image.tag
-    value: latest@sha256:ae2b0c1c8b91d81a4dd51b8f749091652c769e0497a86d2ea23a961c32ee9d60
+    value: latest@sha256:4dfa835c617d8e37fad222002926c086f3ba7f29cc44f7d9e4845ae4ac2a3694
     forcestring: true
