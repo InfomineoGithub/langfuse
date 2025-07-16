@@ -12,10 +12,18 @@ import {
   GetModelsV1Response,
   PostModelsV1Response,
 } from "@/src/features/public-api/types/models";
+import { createOrgProjectAndApiKey } from "@langfuse/shared/src/server";
 
 describe("/models API Endpoints", () => {
+  let auth: string;
+
   beforeEach(async () => {
     await pruneDatabase();
+
+    // Create authentication pairs
+    const { auth: newAuth } = await createOrgProjectAndApiKey();
+    auth = newAuth;
+
     // create some default models that do not belong to a project
     await prisma.model.create({
       data: {
@@ -30,6 +38,13 @@ describe("/models API Endpoints", () => {
         unit: "TOKENS",
       },
     });
+    await prisma.price.createMany({
+      data: [
+        { modelId: "model-1", usageType: "input", price: 0.001 },
+        { modelId: "model-1", usageType: "output", price: 0.002 },
+        { modelId: "model-1", usageType: "total", price: 0.1 },
+      ],
+    });
     await prisma.model.create({
       data: {
         id: "model-2",
@@ -43,6 +58,12 @@ describe("/models API Endpoints", () => {
         unit: "TOKENS",
       },
     });
+    await prisma.price.createMany({
+      data: [
+        { modelId: "model-2", usageType: "input", price: 0.002 },
+        { modelId: "model-2", usageType: "output", price: 0.004 },
+      ],
+    });
   });
   afterEach(async () => await pruneDatabase());
 
@@ -51,12 +72,19 @@ describe("/models API Endpoints", () => {
       GetModelsV1Response,
       "GET",
       "/api/public/models",
+      undefined,
+      auth,
     );
     expect(models.status).toBe(200);
     expect(models.body.data.length).toBe(2);
     expect(models.body.data[0]).toMatchObject({
       isLangfuseManaged: true,
       modelName: "gpt-3.5-turbo",
+      prices: {
+        input: { price: 0.001 },
+        output: { price: 0.002 },
+        total: { price: 0.1 },
+      },
     });
   });
 
@@ -65,6 +93,8 @@ describe("/models API Endpoints", () => {
       GetModelsV1Response,
       "GET",
       "/api/public/models?page=2&limit=1",
+      undefined,
+      auth,
     );
     expect(models.status).toBe(200);
     expect(models.body.data.length).toBe(1);
@@ -90,13 +120,20 @@ describe("/models API Endpoints", () => {
         unit: "TOKENS",
         tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
       },
+      auth,
     );
     expect(customModel.body.isLangfuseManaged).toBe(false);
+    expect(customModel.body.prices).toMatchObject({
+      input: { price: 0.002 },
+      output: { price: 0.004 },
+    });
 
     const models = await makeZodVerifiedAPICall(
       GetModelsV1Response,
       "GET",
       "/api/public/models",
+      undefined,
+      auth,
     );
     expect(models.body.data.length).toBe(3);
 
@@ -104,6 +141,8 @@ describe("/models API Endpoints", () => {
       GetModelV1Response,
       "GET",
       `/api/public/models/${customModel.body.id}`,
+      undefined,
+      auth,
     );
     expect(getModel.body.id).toBe(customModel.body.id);
     expect(getModel.body).toMatchObject({
@@ -115,6 +154,10 @@ describe("/models API Endpoints", () => {
       unit: "TOKENS",
       tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
       isLangfuseManaged: false,
+      prices: {
+        input: { price: 0.002 },
+        output: { price: 0.004 },
+      },
     });
 
     const prices = await prisma.price.findMany({
@@ -138,15 +181,20 @@ describe("/models API Endpoints", () => {
   });
 
   it("Post model with invalid matchPattern", async () => {
-    const customModel = await makeAPICall("POST", "/api/public/models", {
-      modelName: "gpt-3.5-turbo",
-      matchPattern: "[][", // brackets not balanced
-      startDate: "2023-12-01",
-      inputPrice: 0.002,
-      outputPrice: 0.004,
-      unit: "TOKENS",
-      tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
-    });
+    const customModel = await makeAPICall(
+      "POST",
+      "/api/public/models",
+      {
+        modelName: "gpt-3.5-turbo",
+        matchPattern: "[][", // brackets not balanced
+        startDate: "2023-12-01",
+        inputPrice: 0.002,
+        outputPrice: 0.004,
+        unit: "TOKENS",
+        tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
+      },
+      auth,
+    );
     expect(customModel.status).toBe(400);
   });
 
@@ -160,29 +208,40 @@ describe("/models API Endpoints", () => {
         matchPattern: "(.*)(gpt-)(35|3.5)(-turbo)?(.*)",
         unit: "TOKENS",
       },
+      auth,
     );
   });
 
   it("Post model with missing fields", async () => {
-    const { status } = await makeAPICall("POST", "/api/public/models", {
-      modelName: "gpt-3.5-turbo",
-      matchPattern: "(.*)(gpt-)(35|3.5)(-turbo)?(.*)",
-      // missing unit
-    });
+    const { status } = await makeAPICall(
+      "POST",
+      "/api/public/models",
+      {
+        modelName: "gpt-3.5-turbo",
+        matchPattern: "(.*)(gpt-)(35|3.5)(-turbo)?(.*)",
+        // missing unit
+      },
+      auth,
+    );
     expect(status).toBe(400);
   });
 
   it("Post model with invalid price (input and total cost)", async () => {
-    const customModel = await makeAPICall("POST", "/api/public/models", {
-      modelName: "gpt-3.5-turbo",
-      matchPattern: "[][", // brackets not balanced
-      startDate: "2023-12-01",
-      inputPrice: 0.002,
-      outputPrice: 0.004,
-      totalPrice: 0.1,
-      unit: "TOKENS",
-      tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
-    });
+    const customModel = await makeAPICall(
+      "POST",
+      "/api/public/models",
+      {
+        modelName: "gpt-3.5-turbo",
+        matchPattern: "[][", // brackets not balanced
+        startDate: "2023-12-01",
+        inputPrice: 0.002,
+        outputPrice: 0.004,
+        totalPrice: 0.1,
+        unit: "TOKENS",
+        tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
+      },
+      auth,
+    );
     expect(customModel.status).toBe(400);
   });
 
@@ -191,12 +250,16 @@ describe("/models API Endpoints", () => {
       GetModelsV1Response,
       "GET",
       "/api/public/models",
+      undefined,
+      auth,
     );
     expect(models.body.data.length).toBe(2);
 
     const deleteModel = await makeAPICall(
       "DELETE",
       `/api/public/models/${models.body.data[0].id}`,
+      undefined,
+      auth,
     );
     expect(deleteModel.status).toBe(404);
   });
@@ -215,12 +278,15 @@ describe("/models API Endpoints", () => {
         unit: "TOKENS",
         tokenizerConfig: { tokensPerMessage: 3, tokensPerName: 1 },
       },
+      auth,
     );
 
     const models = await makeZodVerifiedAPICall(
       GetModelsV1Response,
       "GET",
       "/api/public/models",
+      undefined,
+      auth,
     );
     expect(models.body.data.length).toBe(3);
 
@@ -228,12 +294,16 @@ describe("/models API Endpoints", () => {
       DeleteModelV1Response,
       "DELETE",
       `/api/public/models/${customModel.body.id}`,
+      undefined,
+      auth,
     );
 
     const modelsAfterDelete = await makeZodVerifiedAPICall(
       GetModelsV1Response,
       "GET",
       "/api/public/models",
+      undefined,
+      auth,
     );
     expect(modelsAfterDelete.body.data.length).toBe(2);
   });

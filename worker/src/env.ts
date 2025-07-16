@@ -1,5 +1,5 @@
 import { removeEmptyEnvVariables } from "@langfuse/shared";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 const EnvSchema = z.object({
   BUILD_ID: z.string().optional(),
@@ -7,11 +7,9 @@ const EnvSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   DATABASE_URL: z.string(),
+  HOSTNAME: z.string().default("0.0.0.0"),
   PORT: z.coerce
-    .number({
-      description:
-        ".env files convert numbers to strings, therefoore we have to enforce them to be numbers",
-    })
+    .number() // ".env files convert numbers to strings, therefore we have to enforce them to be numbers"
     .positive()
     .max(65536, `options.port should be >= 0 and < 65536`)
     .default(3030),
@@ -21,14 +19,17 @@ const EnvSchema = z.object({
   LANGFUSE_S3_BATCH_EXPORT_PREFIX: z.string().default(""),
   LANGFUSE_S3_BATCH_EXPORT_REGION: z.string().optional(),
   LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: z.string().optional(),
+  LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: z.string().optional(),
   LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: z.string().optional(),
   LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: z.string().optional(),
   LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: z
     .enum(["true", "false"])
     .default("false"),
+  LANGFUSE_S3_BATCH_EXPORT_SSE: z.enum(["AES256", "aws:kms"]).optional(),
+  LANGFUSE_S3_BATCH_EXPORT_SSE_KMS_KEY_ID: z.string().optional(),
 
   LANGFUSE_S3_EVENT_UPLOAD_BUCKET: z.string({
-    required_error: "Langfuse requires a bucket name for S3 Event Uploads.",
+    error: "Langfuse requires a bucket name for S3 Event Uploads.",
   }),
   LANGFUSE_S3_EVENT_UPLOAD_PREFIX: z.string().default(""),
   LANGFUSE_S3_EVENT_UPLOAD_REGION: z.string().optional(),
@@ -38,8 +39,11 @@ const EnvSchema = z.object({
   LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: z
     .enum(["true", "false"])
     .default("false"),
+  LANGFUSE_S3_EVENT_UPLOAD_SSE: z.enum(["AES256", "aws:kms"]).optional(),
+  LANGFUSE_S3_EVENT_UPLOAD_SSE_KMS_KEY_ID: z.string().optional(),
 
-  BATCH_EXPORT_ROW_LIMIT: z.coerce.number().positive().default(1_000_000),
+  BATCH_EXPORT_PAGE_SIZE: z.coerce.number().positive().default(500),
+  BATCH_EXPORT_ROW_LIMIT: z.coerce.number().positive().default(1_500_000),
   BATCH_EXPORT_DOWNLOAD_LINK_EXPIRATION_HOURS: z.coerce
     .number()
     .positive()
@@ -72,19 +76,6 @@ const EnvSchema = z.object({
     .number()
     .positive()
     .default(3),
-  REDIS_HOST: z.string().nullish(),
-  REDIS_PORT: z.coerce
-    .number({
-      description:
-        ".env files convert numbers to strings, therefoore we have to enforce them to be numbers",
-    })
-    .positive()
-    .max(65536, `options.port should be >= 0 and < 65536`)
-    .default(6379)
-    .nullable(),
-  REDIS_AUTH: z.string().nullish(),
-  REDIS_CONNECTION_STRING: z.string().nullish(),
-  REDIS_ENABLE_AUTO_PIPELINING: z.enum(["true", "false"]).default("true"),
 
   CLICKHOUSE_URL: z.string().url(),
   CLICKHOUSE_USER: z.string(),
@@ -100,6 +91,7 @@ const EnvSchema = z.object({
     .positive()
     .default(25),
   LANGFUSE_TRACE_DELETE_CONCURRENCY: z.coerce.number().positive().default(1),
+  LANGFUSE_SCORE_DELETE_CONCURRENCY: z.coerce.number().positive().default(1),
   LANGFUSE_PROJECT_DELETE_CONCURRENCY: z.coerce.number().positive().default(1),
   LANGFUSE_EVAL_EXECUTION_WORKER_CONCURRENCY: z.coerce
     .number()
@@ -134,6 +126,9 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("false"),
 
+  LANGFUSE_CACHE_MODEL_MATCH_ENABLED: z.enum(["true", "false"]).default("true"),
+  LANGFUSE_CACHE_MODEL_MATCH_TTL_SECONDS: z.coerce.number().default(30),
+
   // Flags to toggle queue consumers on or off.
   QUEUE_CONSUMER_CLOUD_USAGE_METERING_QUEUE_IS_ENABLED: z
     .enum(["true", "false"])
@@ -159,6 +154,9 @@ const EnvSchema = z.object({
   QUEUE_CONSUMER_TRACE_DELETE_QUEUE_IS_ENABLED: z
     .enum(["true", "false"])
     .default("true"),
+  QUEUE_CONSUMER_SCORE_DELETE_QUEUE_IS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true"),
   QUEUE_CONSUMER_PROJECT_DELETE_QUEUE_IS_ENABLED: z
     .enum(["true", "false"])
     .default("true"),
@@ -171,12 +169,18 @@ const EnvSchema = z.object({
   QUEUE_CONSUMER_POSTHOG_INTEGRATION_QUEUE_IS_ENABLED: z
     .enum(["true", "false"])
     .default("true"),
+  QUEUE_CONSUMER_BLOB_STORAGE_INTEGRATION_QUEUE_IS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true"),
   QUEUE_CONSUMER_INGESTION_SECONDARY_QUEUE_IS_ENABLED: z
     .enum(["true", "false"])
     .default("true"),
   QUEUE_CONSUMER_DATA_RETENTION_QUEUE_IS_ENABLED: z
     .enum(["true", "false"])
     .default("true"),
+  QUEUE_CONSUMER_DEAD_LETTER_RETRY_QUEUE_IS_ENABLED: z
+    .enum(["true", "false"])
+    .default("false"),
 
   // Core data S3 upload - Langfuse Cloud
   LANGFUSE_S3_CORE_DATA_EXPORT_IS_ENABLED: z
@@ -191,6 +195,8 @@ const EnvSchema = z.object({
   LANGFUSE_S3_CORE_DATA_UPLOAD_FORCE_PATH_STYLE: z
     .enum(["true", "false"])
     .default("false"),
+  LANGFUSE_S3_CORE_DATA_UPLOAD_SSE: z.enum(["AES256", "aws:kms"]).optional(),
+  LANGFUSE_S3_CORE_DATA_UPLOAD_SSE_KMS_KEY_ID: z.string().optional(),
 
   // Media upload
   LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: z.string().optional(),
@@ -202,11 +208,23 @@ const EnvSchema = z.object({
   LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: z
     .enum(["true", "false"])
     .default("false"),
+  LANGFUSE_S3_MEDIA_UPLOAD_SSE: z.enum(["AES256", "aws:kms"]).optional(),
+  LANGFUSE_S3_MEDIA_UPLOAD_SSE_KMS_KEY_ID: z.string().optional(),
 
   // Metering data Postgres export - Langfuse Cloud
   LANGFUSE_POSTGRES_METERING_DATA_EXPORT_IS_ENABLED: z
     .enum(["true", "false"])
     .default("false"),
+
+  LANGFUSE_S3_CONCURRENT_READS: z.coerce.number().positive().default(50),
+  LANGFUSE_CLICKHOUSE_PROJECT_DELETION_CONCURRENCY_DURATION_MS: z.coerce
+    .number()
+    .positive()
+    .default(600_000), // 10 minutes
+  LANGFUSE_CLICKHOUSE_TRACE_DELETION_CONCURRENCY_DURATION_MS: z.coerce
+    .number()
+    .positive()
+    .default(120_000), // 2 minutes
 });
 
 export const env: z.infer<typeof EnvSchema> =

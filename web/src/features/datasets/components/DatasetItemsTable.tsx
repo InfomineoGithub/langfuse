@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/src/components/ui/dropdown-menu";
 import { useQueryParams, withDefault, NumberParam } from "use-query-params";
-import { Archive, ListTree, MoreVertical } from "lucide-react";
+import { Archive, ListTree, MoreVertical, Trash2 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { type DatasetItem, DatasetStatus, type Prisma } from "@langfuse/shared";
 import { type LangfuseColumnDef } from "@/src/components/table/types";
@@ -28,6 +28,8 @@ import { type CsvPreviewResult } from "@/src/features/datasets/lib/csvHelpers";
 import { PreviewCsvImport } from "@/src/features/datasets/components/PreviewCsvImport";
 import { UploadDatasetCsv } from "@/src/features/datasets/components/UploadDatasetCsv";
 import { LocalIsoDate } from "@/src/components/LocalIsoDate";
+import { BatchExportTableButton } from "@/src/components/BatchExportTableButton";
+import { BatchExportTableName } from "@langfuse/shared";
 
 type RowData = {
   id: string;
@@ -86,6 +88,10 @@ export function DatasetItemsTable({
   }, [items.isSuccess, items.data]);
 
   const mutUpdate = api.datasets.updateDatasetItem.useMutation({
+    onSuccess: () => utils.datasets.invalidate(),
+  });
+
+  const mutDelete = api.datasets.deleteDatasetItem.useMutation({
     onSuccess: () => utils.datasets.invalidate(),
   });
 
@@ -246,6 +252,27 @@ export function DatasetItemsTable({
                 <Archive className="mr-2 h-4 w-4" />
                 {status === DatasetStatus.ARCHIVED ? "Unarchive" : "Archive"}
               </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!hasAccess}
+                className="text-destructive"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to delete this item? This will also delete all run items that belong to this item.",
+                    )
+                  ) {
+                    capture("dataset_item:delete");
+                    mutDelete.mutate({
+                      projectId: projectId,
+                      datasetId: datasetId,
+                      datasetItemId: id,
+                    });
+                  }
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -282,6 +309,23 @@ export function DatasetItemsTable({
     columns,
   );
 
+  const batchExportButton = (
+    <BatchExportTableButton
+      key="batchExport"
+      projectId={projectId}
+      tableName={BatchExportTableName.DatasetItems}
+      orderByState={{ column: "createdAt", order: "DESC" }}
+      filterState={[
+        {
+          type: "string",
+          operator: "=",
+          column: "datasetId",
+          value: datasetId,
+        },
+      ]}
+    />
+  );
+
   if (items.data?.totalDatasetItems === 0 && hasAccess) {
     return (
       <>
@@ -293,7 +337,7 @@ export function DatasetItemsTable({
           setColumnOrder={setColumnOrder}
           rowHeight={rowHeight}
           setRowHeight={setRowHeight}
-          actionButtons={menuItems}
+          actionButtons={[menuItems, batchExportButton].filter(Boolean)}
         />
         {preview ? (
           <PreviewCsvImport
@@ -321,7 +365,7 @@ export function DatasetItemsTable({
         setColumnOrder={setColumnOrder}
         rowHeight={rowHeight}
         setRowHeight={setRowHeight}
-        actionButtons={menuItems}
+        actionButtons={[menuItems, batchExportButton].filter(Boolean)}
       />
       <DataTable
         columns={columns}

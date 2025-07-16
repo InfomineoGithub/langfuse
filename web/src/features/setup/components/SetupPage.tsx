@@ -22,13 +22,13 @@ import {
   inviteMembersRoute,
   setupTracingRoute,
 } from "@/src/features/setup/setupRoutes";
-import { showChat } from "@/src/features/support-chat/chat";
+import { showChat } from "@/src/features/support-chat/PlainChat";
 import { api } from "@/src/utils/api";
 import { cn } from "@/src/utils/tailwind";
 import { type RouterOutput } from "@/src/utils/types";
 import { Check } from "lucide-react";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { StringParam, useQueryParam } from "use-query-params";
 
 // Multi-step setup process
@@ -201,25 +201,17 @@ export function SetupPage() {
         {
           // 4. Setup Tracing
           stepInt === 4 && project && organization && (
-            <div className="space-y-8">
-              <div>
-                <Header title="API Keys" />
-                <p className="mb-4 text-sm text-muted-foreground">
-                  These keys are used to authenticate your API requests. You can
-                  create more keys later in the project settings.
-                </p>
-                <TracingSetup
-                  projectId={project.id}
-                  hasAnyTrace={hasAnyTrace ?? false}
-                />
-              </div>
-            </div>
+            <TracingSetup
+              projectId={project.id}
+              hasAnyTrace={hasAnyTrace ?? false}
+            />
           )
         }
       </Card>
+
       {stepInt === 2 && organization && (
         <Button
-          className="mt-4"
+          className="mt-4 self-start"
           data-testid="btn-skip-add-members"
           onClick={() => router.push(createProjectRoute(organization.id))}
         >
@@ -230,7 +222,7 @@ export function SetupPage() {
         // 4. Setup Tracing
         stepInt === 4 && project && (
           <Button
-            className="mt-4"
+            className="mt-4 self-start"
             onClick={() => router.push(`/project/${project.id}`)}
             variant={hasAnyTrace ? "default" : "secondary"}
           >
@@ -250,58 +242,65 @@ const TracingSetup = ({
   hasAnyTrace?: boolean;
 }) => {
   const [apiKeys, setApiKeys] = useState<
-    RouterOutput["apiKeys"]["create"] | null
+    RouterOutput["projectApiKeys"]["create"] | null
   >(null);
   const utils = api.useUtils();
-  const mutCreateApiKey = api.apiKeys.create.useMutation({
-    onSuccess: () => {
-      utils.apiKeys.invalidate();
+  const mutCreateApiKey = api.projectApiKeys.create.useMutation({
+    onSuccess: (data) => {
+      utils.projectApiKeys.invalidate();
+      setApiKeys(data);
       showChat();
     },
   });
-  const isLoadingRef = useRef(false);
 
-  useEffect(() => {
-    const createApiKey = async () => {
-      if (projectId && !isLoadingRef.current && !apiKeys) {
-        isLoadingRef.current = true;
-        try {
-          const apiKey = await mutCreateApiKey.mutateAsync({ projectId });
-          setApiKeys(apiKey);
-        } catch (error) {
-          console.error("Error creating API key:", error);
-        } finally {
-          isLoadingRef.current = false;
-        }
-      }
-    };
-    if (!apiKeys) {
-      createApiKey();
+  const createApiKey = async () => {
+    try {
+      await mutCreateApiKey.mutateAsync({ projectId });
+    } catch (error) {
+      console.error("Error creating API key:", error);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   return (
     <div className="space-y-8">
       <div>
-        <ApiKeyRender generatedKeys={apiKeys ?? undefined} />
+        <Header title="API Keys" />
+        <p className="mb-4 text-sm text-muted-foreground">
+          These keys are used to authenticate your API requests. You can create
+          more keys later in the project settings.
+        </p>
+        {apiKeys ? (
+          <ApiKeyRender generatedKeys={apiKeys} scope={"project"} />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              You need to create an API key to start tracing your application.
+            </p>
+            <Button
+              onClick={createApiKey}
+              loading={mutCreateApiKey.isLoading}
+              className="self-start"
+            >
+              Create API Key
+            </Button>
+          </div>
+        )}
       </div>
-      {apiKeys && (
-        <div>
-          <Header
-            title="Setup Tracing"
-            status={hasAnyTrace ? "active" : "pending"}
-          />
-          <p className="mb-4 text-sm text-muted-foreground">
-            Tracing is used to track and analyze your LLM calls. You can always
-            skip this step and setup tracing later.
-          </p>
-          <QuickstartExamples
-            secretKey={apiKeys.secretKey}
-            publicKey={apiKeys.publicKey}
-          />
-        </div>
-      )}
+
+      <div>
+        <Header
+          title="Setup Tracing"
+          status={hasAnyTrace ? "active" : "pending"}
+        />
+        <p className="mb-4 text-sm text-muted-foreground">
+          Tracing is used to track and analyze your LLM calls. You can always
+          skip this step and setup tracing later.
+        </p>
+        <QuickstartExamples
+          secretKey={apiKeys?.secretKey}
+          publicKey={apiKeys?.publicKey}
+        />
+      </div>
     </div>
   );
 };

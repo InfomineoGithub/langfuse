@@ -3,7 +3,7 @@ import {
   protectedOrganizationProcedure,
   protectedProjectProcedure,
 } from "@/src/server/api/trpc";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { throwIfNoProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import { TRPCError } from "@trpc/server";
 import { projectNameSchema } from "@/src/features/auth/lib/projectNameSchema";
@@ -14,6 +14,7 @@ import {
   QueueJobs,
   redis,
   ProjectDeleteQueue,
+  getEnvironmentsForProject,
 } from "@langfuse/shared/src/server";
 import { randomUUID } from "crypto";
 
@@ -105,7 +106,7 @@ export const projectsRouter = createTRPCRouter({
     .input(
       z.object({
         projectId: z.string(),
-        retention: z.number().int().gte(7).nullable(),
+        retention: z.number().int().gte(3).nullable(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -174,6 +175,7 @@ export const projectsRouter = createTRPCRouter({
       await ctx.prisma.apiKey.deleteMany({
         where: {
           projectId: input.projectId,
+          scope: "PROJECT",
         },
       });
 
@@ -275,4 +277,8 @@ export const projectsRouter = createTRPCRouter({
         input.projectId,
       );
     }),
+
+  environmentFilterOptions: protectedProjectProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input }) => getEnvironmentsForProject(input)),
 });

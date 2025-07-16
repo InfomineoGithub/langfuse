@@ -6,7 +6,7 @@ import {
   useQueryParam,
   withDefault,
 } from "use-query-params";
-import type { z } from "zod";
+import type { z } from "zod/v4";
 import { OpenAiMessageView } from "@/src/components/trace/IOPreview";
 import {
   TabsBar,
@@ -14,15 +14,19 @@ import {
   TabsBarContent,
   TabsBarTrigger,
 } from "@/src/components/ui/tabs-bar";
+import { Tabs, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { Badge } from "@/src/components/ui/badge";
 import { CodeView, JSONView } from "@/src/components/ui/CodeJsonViewer";
 import { DetailPageNav } from "@/src/features/navigate-detail-pages/DetailPageNav";
-import { PromptType } from "@/src/features/prompts/server/utils/validation";
 import useProjectIdFromURL from "@/src/hooks/useProjectIdFromURL";
 import { api } from "@/src/utils/api";
-import { extractVariables } from "@langfuse/shared";
+import {
+  extractVariables,
+  PRODUCTION_LABEL,
+  PromptType,
+} from "@langfuse/shared";
 import { PromptHistoryNode } from "./prompt-history";
-import { JumpToPlaygroundButton } from "@/src/ee/features/playground/page/components/JumpToPlaygroundButton";
+import { JumpToPlaygroundButton } from "@/src/features/playground/page/components/JumpToPlaygroundButton";
 import { ChatMlArraySchema } from "@/src/components/schemas/ChatMlSchema";
 import Generations from "@/src/components/table/use-cases/observations";
 import { FlaskConical, MoreVertical, Plus } from "lucide-react";
@@ -34,9 +38,8 @@ import {
   DialogContent,
   DialogTrigger,
 } from "@/src/components/ui/dialog";
-import { CreateExperimentsForm } from "@/src/ee/features/experiments/components/CreateExperimentsForm";
+import { CreateExperimentsForm } from "@/src/features/experiments/components/CreateExperimentsForm";
 import { useMemo, useState } from "react";
-import { useHasEntitlement } from "@/src/features/entitlements/hooks";
 import { showSuccessToast } from "@/src/features/notifications/showSuccessToast";
 import { DuplicatePromptButton } from "@/src/features/prompts/components/duplicate-prompt";
 import Page from "@/src/components/layouts/page";
@@ -51,7 +54,8 @@ import { TagPromptDetailsPopover } from "@/src/features/tag/components/TagPrompt
 import { SetPromptVersionLabels } from "@/src/features/prompts/components/SetPromptVersionLabels";
 import { CommentDrawerButton } from "@/src/features/comments/CommentDrawerButton";
 import { Command, CommandInput } from "@/src/components/ui/command";
-import { PRODUCTION_LABEL } from "@/src/features/prompts/constants";
+import { renderContentWithPromptButtons } from "@/src/features/prompts/components/renderContentWithPromptButtons";
+import { PromptVariableListPreview } from "@/src/features/prompts/components/PromptVariableListPreview";
 
 const getPythonCode = (
   name: string,
@@ -62,7 +66,7 @@ const getPythonCode = (
 # Initialize Langfuse client
 langfuse = Langfuse()
 
-# Get production prompt 
+# Get production prompt
 prompt = langfuse.get_prompt("${name}")
 
 # Get by label
@@ -82,7 +86,7 @@ const getJsCode = (
 // Initialize the Langfuse client
 const langfuse = new Langfuse();
 
-// Get production prompt 
+// Get production prompt
 const prompt = await langfuse.getPrompt("${name}");
 
 // Get by label
@@ -91,16 +95,27 @@ ${labels.length > 0 ? labels.map((label) => `const prompt = await langfuse.getPr
 
 // Get by version number, usually not recommended as it requires code changes to deploy new prompt versions
 langfuse.getPrompt("${name}", ${version})
+`;
 
-}`;
-
-export const PromptDetail = () => {
+export const PromptDetail = ({
+  promptName: promptNameProp,
+}: { promptName?: string } = {}) => {
   const projectId = useProjectIdFromURL();
   const capture = usePostHogClientCapture();
-  const promptName = decodeURIComponent(useRouter().query.promptName as string);
+  const router = useRouter();
+
+  const promptName =
+    promptNameProp ||
+    (router.query.promptName
+      ? decodeURIComponent(router.query.promptName as string)
+      : "");
   const [currentPromptVersion, setCurrentPromptVersion] = useQueryParam(
     "version",
     NumberParam,
+  );
+  const [currentPromptLabel, setCurrentPromptLabel] = useQueryParam(
+    "label",
+    StringParam,
   );
   const [currentTab, setCurrentTab] = useQueryParam(
     "tab",
@@ -109,11 +124,14 @@ export const PromptDetail = () => {
   const [isLabelPopoverOpen, setIsLabelPopoverOpen] = useState(false);
   const [isCreateExperimentDialogOpen, setIsCreateExperimentDialogOpen] =
     useState(false);
+  const [resolutionMode, setResolutionMode] = useState<"tagged" | "resolved">(
+    "tagged",
+  );
   const hasAccess = useHasProjectAccess({
     projectId,
     scope: "prompts:CUD",
   });
-  const hasEntitlement = useHasEntitlement("prompt-experiments");
+
   const hasExperimentWriteAccess = useHasProjectAccess({
     projectId,
     scope: "promptExperiments:CUD",
@@ -129,11 +147,29 @@ export const PromptDetail = () => {
     ? promptHistory.data?.promptVersions.find(
         (prompt) => prompt.version === currentPromptVersion,
       )
-    : promptHistory.data?.promptVersions[0];
+    : currentPromptLabel
+      ? promptHistory.data?.promptVersions.find((prompt) =>
+          prompt.labels.includes(currentPromptLabel),
+        )
+      : promptHistory.data?.promptVersions[0];
+
+  const promptGraph = api.prompts.resolvePromptGraph.useQuery(
+    {
+      promptId: prompt?.id as string,
+      projectId: projectId as string,
+    },
+    {
+      enabled: Boolean(projectId) && Boolean(prompt?.id),
+    },
+  );
 
   let chatMessages: z.infer<typeof ChatMlArraySchema> | null = null;
   try {
-    chatMessages = ChatMlArraySchema.parse(prompt?.prompt);
+    chatMessages = ChatMlArraySchema.parse(
+      resolutionMode === "resolved"
+        ? promptGraph.data?.resolvedPrompt
+        : prompt?.prompt,
+    );
   } catch (error) {
     if (PromptType.Chat === prompt?.type) {
       console.warn(
@@ -142,6 +178,7 @@ export const PromptDetail = () => {
       );
     }
   }
+
   const utils = api.useUtils();
 
   const handleExperimentSuccess = async (data?: {
@@ -230,7 +267,6 @@ export const PromptDetail = () => {
 
   return (
     <Page
-      withPadding={false}
       headerProps={{
         title: prompt.name,
         itemType: "PROMPT",
@@ -247,7 +283,7 @@ export const PromptDetail = () => {
         ],
         tabsComponent: (
           <TabsBar value="versions">
-            <TabsBarList className="justify-start">
+            <TabsBarList>
               <TabsBarTrigger value="versions">Versions</TabsBarTrigger>
               <TabsBarTrigger value="metrics" asChild>
                 <Link
@@ -317,7 +353,10 @@ export const PromptDetail = () => {
             <PromptHistoryNode
               prompts={promptHistory.data.promptVersions}
               currentPromptVersion={prompt.version}
-              setCurrentPromptVersion={setCurrentPromptVersion}
+              setCurrentPromptVersion={(version) => {
+                setCurrentPromptVersion(version);
+                setCurrentPromptLabel(null);
+              }}
               totalCount={promptHistory.data.totalCount}
             />
           </div>
@@ -356,11 +395,14 @@ export const PromptDetail = () => {
               <div className="flex h-full flex-wrap content-start items-start justify-end gap-1 lg:flex-nowrap">
                 <JumpToPlaygroundButton
                   source="prompt"
-                  prompt={prompt}
+                  prompt={{
+                    ...prompt,
+                    resolvedPrompt: promptGraph.data?.resolvedPrompt,
+                  }}
                   analyticsEventName="prompt_detail:test_in_playground_button_click"
                   variant="outline"
                 />
-                {hasAccess && hasEntitlement && (
+                {hasAccess && (
                   <Dialog
                     open={isCreateExperimentDialogOpen}
                     onOpenChange={setIsCreateExperimentDialogOpen}
@@ -377,7 +419,7 @@ export const PromptDetail = () => {
                         </span>
                       </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-h-[90vh] overflow-y-auto">
                       <CreateExperimentsForm
                         key={`create-experiment-form-${prompt.id}`}
                         projectId={projectId as string}
@@ -454,33 +496,59 @@ export const PromptDetail = () => {
               className="mt-0 flex max-h-full min-h-0 flex-1 overflow-hidden"
             >
               <div className="mb-2 flex max-h-full min-h-0 w-full flex-col gap-2 overflow-y-auto">
+                {promptGraph.data?.graph && (
+                  <div className="flex items-center justify-end py-2">
+                    <Tabs
+                      value={resolutionMode}
+                      onValueChange={(value) => {
+                        setResolutionMode(value as "tagged" | "resolved");
+                      }}
+                    >
+                      <TabsList className="h-auto gap-1">
+                        <TabsTrigger
+                          value="resolved"
+                          className="h-fit px-1 text-xs"
+                        >
+                          Resolved prompt
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="tagged"
+                          className="h-fit px-1 text-xs"
+                        >
+                          Tagged prompt
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+                )}
                 {prompt.type === PromptType.Chat && chatMessages ? (
-                  <OpenAiMessageView
-                    messages={chatMessages}
-                    collapseLongHistory={false}
-                  />
+                  <div className="w-full">
+                    <OpenAiMessageView
+                      messages={chatMessages}
+                      collapseLongHistory={false}
+                      projectIdForPromptButtons={projectId}
+                    />
+                  </div>
                 ) : typeof prompt.prompt === "string" ? (
-                  <CodeView content={prompt.prompt} title="Text Prompt" />
+                  resolutionMode === "resolved" &&
+                  promptGraph.data?.resolvedPrompt ? (
+                    <CodeView
+                      content={String(promptGraph.data.resolvedPrompt)}
+                      title="Text Prompt (resolved)"
+                    />
+                  ) : (
+                    <CodeView
+                      content={renderContentWithPromptButtons(
+                        projectId as string,
+                        prompt.prompt,
+                      )}
+                      title="Text Prompt"
+                    />
+                  )
                 ) : (
                   <JSONView json={prompt.prompt} title="Prompt" />
                 )}
-                {extractedVariables.length > 0 && (
-                  <div className="flex flex-col">
-                    <div className="my-1 flex flex-shrink-0 items-center justify-between pl-1 text-sm font-medium">
-                      Variables
-                    </div>
-                    <div className="flex flex-wrap gap-2 rounded-md">
-                      {extractedVariables.map((variable) => (
-                        <div
-                          key={variable}
-                          className="flex flex-col gap-1 rounded-md border p-2 text-sm"
-                        >
-                          {`{{${variable}}}`}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <PromptVariableListPreview variables={extractedVariables} />
               </div>
             </TabsBarContent>
             <TabsBarContent

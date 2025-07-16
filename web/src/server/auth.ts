@@ -24,17 +24,20 @@ import GitHubProvider from "next-auth/providers/github";
 import GitLabProvider from "next-auth/providers/gitlab";
 import OktaProvider from "next-auth/providers/okta";
 import EmailProvider from "next-auth/providers/email";
+import { randomInt } from "crypto";
 import Auth0Provider from "next-auth/providers/auth0";
 import CognitoProvider from "next-auth/providers/cognito";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import KeycloakProvider from "next-auth/providers/keycloak";
+import WorkOSProvider from "next-auth/providers/workos";
 import { type Provider } from "next-auth/providers/index";
 import { getCookieName, getCookieOptions } from "./utils/cookies";
 import {
+  findMultiTenantSsoConfig,
   getSsoAuthProviderIdForDomain,
   loadSsoProviders,
 } from "@/src/ee/features/multi-tenant-sso/utils";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { CloudConfigSchema } from "@langfuse/shared";
 import {
   CustomSSOProvider,
@@ -50,6 +53,8 @@ import {
 } from "@/src/features/entitlements/server/getPlan";
 import { projectRoleAccessRights } from "@/src/features/rbac/constants/projectAccessRights";
 import { hasEntitlementBasedOnPlan } from "@/src/features/entitlements/server/hasEntitlement";
+import { getSSOBlockedDomains } from "@/src/features/auth-credentials/server/signupApiHandler";
+import { createSupportEmailHash } from "@/src/features/support-chat/createSupportEmailHash";
 
 function canCreateOrganizations(userEmail: string | null): boolean {
   const instancePlan = getSelfHostedInstancePlanServerSide();
@@ -111,8 +116,7 @@ const staticProviders: Provider[] = [
         }
       }
 
-      const blockedDomains =
-        env.AUTH_DOMAINS_WITH_SSO_ENFORCEMENT?.split(",") ?? [];
+      const blockedDomains = getSSOBlockedDomains();
       const domain = credentials.email.split("@")[1]?.toLowerCase();
       if (domain && blockedDomains.includes(domain)) {
         throw new Error(
@@ -136,7 +140,7 @@ const staticProviders: Provider[] = [
       if (!dbUser) throw new Error("Invalid credentials");
       if (dbUser.password === null)
         throw new Error(
-          "Please sign in with the identity provider that is linked to your account.",
+          "Please sign in with the identity provider (e.g. Google, GitHub, Azure AD, etc.) that is linked to your account.",
         );
 
       const isValidPassword = await verifyPassword(
@@ -167,7 +171,10 @@ if (env.SMTP_CONNECTION_URL && env.EMAIL_FROM_ADDRESS) {
     EmailProvider({
       server: env.SMTP_CONNECTION_URL,
       from: env.EMAIL_FROM_ADDRESS,
-      maxAge: 60 * 10, // 10 minutes
+      maxAge: 3 * 60, // 3 minutes
+      async generateVerificationToken() {
+        return randomInt(100000, 1000000).toString();
+      },
       sendVerificationRequest: sendResetPasswordVerificationRequest,
     }),
   );
@@ -295,6 +302,12 @@ if (env.AUTH_GITLAB_CLIENT_ID && env.AUTH_GITLAB_CLIENT_SECRET)
       client: {
         token_endpoint_auth_method: env.AUTH_GITLAB_CLIENT_AUTH_METHOD,
       },
+      authorization: {
+        url: `${env.AUTH_GITLAB_URL}/oauth/authorize`,
+        params: { scope: "read_user" },
+      },
+      token: `${env.AUTH_GITLAB_URL}/oauth/token`,
+      userinfo: `${env.AUTH_GITLAB_URL}/api/v4/user`,
       checks: env.AUTH_GITLAB_CHECKS,
     }),
   );
@@ -356,6 +369,19 @@ if (
     }),
   );
 
+if (env.AUTH_WORKOS_CLIENT_ID && env.AUTH_WORKOS_CLIENT_SECRET)
+  staticProviders.push(
+    WorkOSProvider({
+      clientId: env.AUTH_WORKOS_CLIENT_ID,
+      clientSecret: env.AUTH_WORKOS_CLIENT_SECRET,
+      allowDangerousEmailAccountLinking:
+        env.AUTH_WORKOS_ALLOW_ACCOUNT_LINKING === "true",
+      client: {
+        token_endpoint_auth_method: "client_secret_post",
+      },
+    }),
+  );
+
 // Extend Prisma Adapter
 const prismaAdapter = PrismaAdapter(prisma);
 const ignoredAccountFields = env.AUTH_IGNORE_ACCOUNT_FIELDS?.split(",") ?? [];
@@ -395,6 +421,11 @@ const extendedPrismaAdapter: Adapter = {
     if (data.provider === "keycloak") {
       delete data["refresh_expires_in"];
       delete data["not-before-policy"];
+    }
+
+    // WorkOS returns profile data that doesn't match the schema
+    if (data.provider === "workos") {
+      delete data["profile"];
     }
 
     // Optionally, remove fields returned by the provider that cause issues with the adapter
@@ -467,8 +498,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             environment: {
               enableExperimentalFeatures:
                 env.LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES === "true",
-              disableExpensivePostgresQueries:
-                env.LANGFUSE_DISABLE_EXPENSIVE_POSTGRES_QUERIES === "true",
               // Enables features that are only available under an enterprise license when self-hosting Langfuse
               // If you edit this line, you risk executing code that is not MIT licensed (self-contained in /ee folders otherwise)
               selfHostedInstancePlan: getSelfHostedInstancePlanServerSide(),
@@ -480,6 +509,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     id: dbUser.id,
                     name: dbUser.name,
                     email: dbUser.email,
+                    emailSupportHash: dbUser.email
+                      ? createSupportEmailHash(dbUser.email)
+                      : undefined,
                     image: dbUser.image,
                     admin: dbUser.admin,
                     canCreateOrganizations: canCreateOrganizations(
@@ -494,6 +526,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                           id: orgMembership.organization.id,
                           name: orgMembership.organization.name,
                           role: orgMembership.role,
+                          metadata:
+                            (orgMembership.organization.metadata as Record<
+                              string,
+                              unknown
+                            >) ?? {},
                           cloudConfig: parsedCloudConfig.data,
                           projects: orgMembership.organization.projects
                             .map((project) => {
@@ -508,6 +545,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                                 role: projectRole,
                                 retentionDays: project.retentionDays,
                                 deletedAt: project.deletedAt,
+                                metadata:
+                                  (project.metadata as Record<
+                                    string,
+                                    unknown
+                                  >) ?? {},
                               };
                             })
                             // Only include projects where the user has the required role
@@ -547,9 +589,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           // EE: Check custom SSO enforcement, enforce the specific SSO provider on email domain
           // This also blocks setting a password for an email that is enforced to use SSO via password reset flow
-          const domain = email.split("@")[1];
+          const userDomain = email.split("@")[1].toLowerCase();
           const multiTenantSsoProvider =
-            await getSsoAuthProviderIdForDomain(domain);
+            await getSsoAuthProviderIdForDomain(userDomain);
           if (
             multiTenantSsoProvider &&
             account?.provider !== multiTenantSsoProvider
@@ -558,6 +600,22 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               "Custom SSO provider enforced for domain, user signed in with other provider",
             );
             throw new Error(`You must sign in via SSO for this domain.`);
+          }
+
+          // EE: Check that provider is only used for the associated domain
+          if (account?.provider) {
+            const { isMultiTenantSsoProvider, domain: ssoDomain } =
+              await findMultiTenantSsoConfig({
+                providerId: account.provider,
+              });
+            if (
+              isMultiTenantSsoProvider &&
+              ssoDomain.toLowerCase() !== userDomain.toLowerCase()
+            ) {
+              throw new Error(
+                `This domain is not associated with this SSO provider.`,
+              );
+            }
           }
 
           // Only allow sign in via email link if user is already in db as this is used for password reset

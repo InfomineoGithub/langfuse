@@ -8,6 +8,7 @@ import {
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import { api } from "@/src/utils/api";
+import { copyTextToClipboard } from "@/src/utils/clipboard";
 import { CheckIcon, Globe, Link, Share2 } from "lucide-react";
 import { useState } from "react";
 
@@ -15,6 +16,7 @@ export const PublishTraceSwitch = (props: {
   traceId: string;
   projectId: string;
   isPublic: boolean;
+  size?: "icon" | "icon-xs";
 }) => {
   const capture = usePostHogClientCapture();
   const hasAccess = useHasProjectAccess({
@@ -31,6 +33,7 @@ export const PublishTraceSwitch = (props: {
       id={props.traceId}
       itemName="trace"
       isPublic={props.isPublic}
+      size={props.size}
       onChange={(val) => {
         mut.mutate({
           projectId: props.projectId,
@@ -49,6 +52,7 @@ export const PublishSessionSwitch = (props: {
   sessionId: string;
   projectId: string;
   isPublic: boolean;
+  size?: "icon" | "icon-xs";
 }) => {
   const capture = usePostHogClientCapture();
   const hasAccess = useHasProjectAccess({
@@ -65,6 +69,7 @@ export const PublishSessionSwitch = (props: {
       id={props.sessionId}
       itemName="session"
       isPublic={props.isPublic}
+      size={props.size}
       onChange={(val) => {
         mut.mutate({
           projectId: props.projectId,
@@ -86,12 +91,13 @@ const Base = (props: {
   isLoading: boolean;
   isPublic: boolean;
   disabled?: boolean;
+  size?: "icon" | "icon-xs";
 }) => {
   const [isCopied, setIsCopied] = useState(false);
 
   const copyUrl = () => {
     setIsCopied(true);
-    void navigator.clipboard.writeText(window.location.href);
+    void copyTextToClipboard(window.location.href);
     setTimeout(() => setIsCopied(false), 2500);
   };
 
@@ -108,7 +114,7 @@ const Base = (props: {
             <Button
               id="publish-trace"
               variant="ghost"
-              size="icon"
+              size={props.size}
               loading={props.isLoading}
               disabled={props.disabled}
             >

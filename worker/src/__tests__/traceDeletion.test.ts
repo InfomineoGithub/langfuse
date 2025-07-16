@@ -4,12 +4,12 @@ import {
   createObservation,
   createObservationsCh,
   createOrgProjectAndApiKey,
-  createScore,
+  createTraceScore,
   createScoresCh,
   createTrace,
   createTracesCh,
-  getEventLogByProjectId,
-  getObservationsViewForTrace,
+  getBlobStorageByProjectId,
+  getObservationsForTrace,
   getScoresForTraces,
   getTracesByIds,
   StorageService,
@@ -37,7 +37,7 @@ describe("trace deletion", () => {
     mediaStorageService = StorageServiceFactory.getInstance({
       accessKeyId: env.LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID,
       secretAccessKey: env.LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY,
-      bucketName: env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET,
+      bucketName: String(env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET),
       endpoint: env.LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT,
       region: env.LANGFUSE_S3_MEDIA_UPLOAD_REGION,
       forcePathStyle: env.LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE === "true",
@@ -50,8 +50,8 @@ describe("trace deletion", () => {
 
     const traceId = randomUUID();
     await createTracesCh([createTrace({ id: traceId })]);
-    await createObservationsCh([createObservation({ traceId })]);
-    await createScoresCh([createScore({ traceId })]);
+    await createObservationsCh([createObservation({ trace_id: traceId })]);
+    await createScoresCh([createTraceScore({ trace_id: traceId })]);
 
     // When
     await processClickhouseTraceDelete("projectId", [traceId]);
@@ -60,7 +60,11 @@ describe("trace deletion", () => {
     const traces = await getTracesByIds([traceId], projectId);
     expect(traces).toHaveLength(0);
 
-    const observations = await getObservationsViewForTrace(traceId, projectId);
+    const observations = await getObservationsForTrace({
+      traceId,
+      projectId,
+      includeIO: true,
+    });
     expect(observations).toHaveLength(0);
 
     const scores = await getScoresForTraces({
@@ -112,7 +116,7 @@ describe("trace deletion", () => {
         projectId,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3), // 3 days in the past
         bucketPath: `${projectId}/trace-${traceId}.txt`,
-        bucketName: env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET,
+        bucketName: String(env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET),
         contentType: fileType,
         contentLength: 0,
       },
@@ -135,7 +139,7 @@ describe("trace deletion", () => {
         projectId,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3), // 3 days in the past
         bucketPath: `${projectId}/observation-${observationId}.txt`,
-        bucketName: env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET,
+        bucketName: String(env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET),
         contentType: fileType,
         contentLength: 0,
       },
@@ -168,6 +172,83 @@ describe("trace deletion", () => {
     // No need to check observationMedia and traceMedia as they have a foreign key to media table.
   });
 
+  it("should NOT delete S3 media files for deleted traces if referenced by other entity", async () => {
+    // Setup
+    const { projectId } = await createOrgProjectAndApiKey();
+
+    const traceId1 = randomUUID();
+    const traceId2 = randomUUID();
+
+    await createTracesCh([
+      createTrace({ id: traceId1, project_id: projectId }),
+      createTrace({ id: traceId2, project_id: projectId }),
+    ]);
+
+    const fileType = "text/plain";
+    const data = "Hello, world!";
+    const expiresInSeconds = 3600;
+    await mediaStorageService.uploadFile({
+      fileName: `${projectId}/trace-${traceId1}.txt`,
+      fileType,
+      data,
+      expiresInSeconds,
+    });
+
+    const traceMediaId = randomUUID();
+    await prisma.media.create({
+      data: {
+        id: traceMediaId,
+        sha256Hash: randomUUID(),
+        projectId,
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3), // 3 days in the past
+        bucketPath: `${projectId}/trace-${traceId1}.txt`,
+        bucketName: String(env.LANGFUSE_S3_MEDIA_UPLOAD_BUCKET),
+        contentType: fileType,
+        contentLength: 0,
+      },
+    });
+    // Create TWO references to media item
+    await prisma.traceMedia.create({
+      data: {
+        id: randomUUID(),
+        projectId,
+        traceId: traceId1,
+        mediaId: traceMediaId,
+        field: "test",
+      },
+    });
+    await prisma.traceMedia.create({
+      data: {
+        id: randomUUID(),
+        projectId,
+        traceId: traceId2,
+        mediaId: traceMediaId,
+        field: "test",
+      },
+    });
+
+    // When
+    await processClickhouseTraceDelete(projectId, [traceId1]);
+
+    // Then
+    const files = await mediaStorageService.listFiles(projectId);
+    expect(files).toHaveLength(1);
+
+    const media = await prisma.media.findMany({
+      where: {
+        projectId,
+      },
+    });
+    expect(media).toHaveLength(1);
+
+    const traceMedia = await prisma.traceMedia.findMany({
+      where: {
+        projectId,
+      },
+    });
+    expect(traceMedia).toHaveLength(1);
+  });
+
   it("should delete S3 event files for deleted traces", async () => {
     // Setup
     const { projectId } = await createOrgProjectAndApiKey();
@@ -185,7 +266,11 @@ describe("trace deletion", () => {
       }),
     ]);
     await createScoresCh([
-      createScore({ id: scoreId, trace_id: traceId, project_id: projectId }),
+      createTraceScore({
+        id: scoreId,
+        trace_id: traceId,
+        project_id: projectId,
+      }),
     ]);
 
     const fileType = "application/json";
@@ -213,7 +298,7 @@ describe("trace deletion", () => {
     ]);
 
     await clickhouseClient().insert({
-      table: "event_log",
+      table: "blob_storage_file_log",
       format: "JSONEachRow",
       values: [
         {
@@ -256,7 +341,7 @@ describe("trace deletion", () => {
     await processClickhouseTraceDelete(projectId, [traceId]);
 
     // Then
-    const eventLog = getEventLogByProjectId(projectId);
+    const eventLog = getBlobStorageByProjectId(projectId);
     for await (const _ of eventLog) {
       // Should never happen as the expect event log to be empty
       expect(true).toBe(false);

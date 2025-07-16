@@ -9,11 +9,13 @@ import {
   protectedOrganizationProcedure,
 } from "@/src/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import * as z from "zod";
+import * as z from "zod/v4";
 import { throwIfNoOrganizationAccess } from "@/src/features/rbac/utils/checkOrganizationAccess";
 import { auditLog } from "@/src/features/audit-logs/auditLog";
 import {
   getObservationCountOfProjectsSinceCreationDate,
+  getScoreCountOfProjectsSinceCreationDate,
+  getTraceCountOfProjectsSinceCreationDate,
   logger,
 } from "@langfuse/shared/src/server";
 
@@ -397,7 +399,7 @@ export const cloudBillingRouter = createTRPCRouter({
               }
               return acc;
             }, 0);
-            // get meter for usage type (events or observations)
+            // get meter for usage type (units or observations)
             const meterId = usageInvoiceLines[0]?.plan?.meter;
             const meter = meterId
               ? await stripeClient.billing.meters.retrieve(meterId)
@@ -405,7 +407,7 @@ export const cloudBillingRouter = createTRPCRouter({
 
             return {
               usageCount: usage,
-              usageType: meter?.display_name.toLowerCase() ?? "events",
+              usageType: meter?.display_name.toLowerCase() ?? "units",
               billingPeriod,
               upcomingInvoice,
             };
@@ -420,21 +422,30 @@ export const cloudBillingRouter = createTRPCRouter({
         }
       }
 
-      // Free plan, usage not tracked on Stripe
+      // Free plan, usage not tracked on Stripe, get usage from Clickhouse
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       thirtyDaysAgo.setHours(0, 0, 0, 0);
       const projectIds = organization.projects.map((p) => p.id);
 
-      const countObservations =
-        await getObservationCountOfProjectsSinceCreationDate({
+      const [countTraces, countObservations, countScores] = await Promise.all([
+        getTraceCountOfProjectsSinceCreationDate({
           projectIds,
           start: thirtyDaysAgo,
-        });
+        }),
+        getObservationCountOfProjectsSinceCreationDate({
+          projectIds,
+          start: thirtyDaysAgo,
+        }),
+        getScoreCountOfProjectsSinceCreationDate({
+          projectIds,
+          start: thirtyDaysAgo,
+        }),
+      ]);
 
       return {
-        usageCount: countObservations,
-        usageType: "observations",
+        usageCount: countTraces + countObservations + countScores,
+        usageType: "units",
       };
     }),
 });

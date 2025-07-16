@@ -18,7 +18,6 @@ import { AppSidebar } from "@/src/components/nav/app-sidebar";
 import { CommandMenu } from "@/src/features/command-k-menu/CommandMenu";
 
 const signOutUser = async () => {
-  localStorage.clear();
   sessionStorage.clear();
 
   await signOut();
@@ -123,6 +122,14 @@ export default function Layout(props: PropsWithChildren) {
     if (!routerOrganizationId && route.pathname.includes("[organizationId]"))
       return null;
 
+    // UI customization – hide routes that belong to a disabled product module
+    if (
+      route.productModule &&
+      uiCustomization !== null &&
+      !uiCustomization.visibleModules.includes(route.productModule)
+    )
+      return null;
+
     // Feature Flags
     if (
       route.featureFlag !== undefined &&
@@ -177,21 +184,14 @@ export default function Layout(props: PropsWithChildren) {
     const items: (NavigationItem | null)[] =
       route.items?.map((item) => mapNavigation(item)).filter(Boolean) ?? [];
 
-    const url = (
-      route.customizableHref
-        ? (uiCustomization?.[route.customizableHref] ?? route.pathname)
-        : route.pathname
-    )
+    const url = route.pathname
+
       ?.replace("[projectId]", routerProjectId ?? "")
       .replace("[organizationId]", routerOrganizationId ?? "");
 
     return {
       ...route,
       url: url,
-      newTab:
-        route.customizableHref && uiCustomization?.[route.customizableHref]
-          ? true
-          : route.newTab,
       isActive: router.pathname === route.pathname,
       items:
         items.length > 0
@@ -289,13 +289,13 @@ export default function Layout(props: PropsWithChildren) {
           rel="icon"
           type="image/png"
           sizes="32x32"
-          href={`${env.NEXT_PUBLIC_BASE_PATH ?? ""}/favicon-32x32.png`}
+          href={`${env.NEXT_PUBLIC_BASE_PATH ?? ""}/favicon-32x32${env.NEXT_PUBLIC_LANGFUSE_CLOUD_REGION === "DEV" ? "-dev" : ""}.png`}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="16x16"
-          href={`${env.NEXT_PUBLIC_BASE_PATH ?? ""}/favicon-16x16.png`}
+          href={`${env.NEXT_PUBLIC_BASE_PATH ?? ""}/favicon-16x16${env.NEXT_PUBLIC_LANGFUSE_CLOUD_REGION === "DEV" ? "-dev" : ""}.png`}
         />
       </Head>
       <div>

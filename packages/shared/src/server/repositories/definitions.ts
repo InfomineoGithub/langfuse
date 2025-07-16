@@ -1,4 +1,4 @@
-import z from "zod";
+import z from "zod/v4";
 
 export const clickhouseStringDateSchema = z
   .string()
@@ -36,8 +36,9 @@ export const observationRecordBaseSchema = z.object({
   project_id: z.string(),
   type: z.string(),
   parent_observation_id: z.string().nullish(),
+  environment: z.string().default("default"),
   name: z.string().nullish(),
-  metadata: z.record(z.string()),
+  metadata: z.record(z.string(), z.string()),
   level: z.string().nullish(),
   status_message: z.string().nullish(),
   version: z.string().nullish(),
@@ -52,9 +53,6 @@ export const observationRecordBaseSchema = z.object({
   prompt_version: z.number().nullish(),
   is_deleted: z.number(),
 });
-export type ObservationRecordBaseType = z.infer<
-  typeof observationRecordBaseSchema
->;
 
 export const observationRecordReadSchema = observationRecordBaseSchema.extend({
   created_at: clickhouseStringDateSchema,
@@ -94,10 +92,11 @@ export const traceRecordBaseSchema = z.object({
   id: z.string(),
   name: z.string().nullish(),
   user_id: z.string().nullish(),
-  metadata: z.record(z.string()),
+  metadata: z.record(z.string(), z.string()),
   release: z.string().nullish(),
   version: z.string().nullish(),
   project_id: z.string(),
+  environment: z.string().default("default"),
   public: z.boolean(),
   bookmarked: z.boolean(),
   tags: z.array(z.string()),
@@ -106,7 +105,6 @@ export const traceRecordBaseSchema = z.object({
   session_id: z.string().nullish(),
   is_deleted: z.number(),
 });
-export type TraceRecordBaseType = z.infer<typeof traceRecordBaseSchema>;
 
 export const traceRecordReadSchema = traceRecordBaseSchema.extend({
   timestamp: clickhouseStringDateSchema,
@@ -127,12 +125,16 @@ export type TraceRecordInsertType = z.infer<typeof traceRecordInsertSchema>;
 export const scoreRecordBaseSchema = z.object({
   id: z.string(),
   project_id: z.string(),
-  trace_id: z.string(),
+  trace_id: z.string().nullish(),
+  session_id: z.string().nullish(),
   observation_id: z.string().nullish(),
+  dataset_run_id: z.string().nullish(),
+  environment: z.string().default("default"),
   name: z.string(),
   value: z.number().nullish(),
   source: z.string(),
   comment: z.string().nullish(),
+  metadata: z.record(z.string(), z.string()),
   author_user_id: z.string().nullish(),
   config_id: z.string().nullish(),
   data_type: z.enum(["NUMERIC", "CATEGORICAL", "BOOLEAN"]).nullish(),
@@ -140,7 +142,6 @@ export const scoreRecordBaseSchema = z.object({
   queue_id: z.string().nullish(),
   is_deleted: z.number(),
 });
-export type ScoreRecordBaseType = z.infer<typeof scoreRecordBaseSchema>;
 
 export const scoreRecordReadSchema = scoreRecordBaseSchema.extend({
   created_at: clickhouseStringDateSchema,
@@ -158,7 +159,7 @@ export const scoreRecordInsertSchema = scoreRecordBaseSchema.extend({
 });
 export type ScoreRecordInsertType = z.infer<typeof scoreRecordInsertSchema>;
 
-export const eventLogRecordBaseSchema = z.object({
+export const blobStorageFileLogRecordBaseSchema = z.object({
   id: z.string(),
   project_id: z.string(),
   entity_type: z.string(),
@@ -168,18 +169,25 @@ export const eventLogRecordBaseSchema = z.object({
   event_id: z.string().nullable(),
   bucket_name: z.string(),
   bucket_path: z.string(),
+  is_deleted: z.number(),
 });
-export const eventLogRecordReadSchema = eventLogRecordBaseSchema.extend({
-  created_at: clickhouseStringDateSchema,
-  updated_at: clickhouseStringDateSchema,
-});
-export type EventLogRecordReadType = z.infer<typeof eventLogRecordReadSchema>;
-export const eventLogRecordInsertSchema = eventLogRecordBaseSchema.extend({
-  created_at: z.number(),
-  updated_at: z.number(),
-});
-export type EventLogRecordInsertType = z.infer<
-  typeof eventLogRecordInsertSchema
+export const blobStorageFileRefRecordReadSchema =
+  blobStorageFileLogRecordBaseSchema.extend({
+    created_at: clickhouseStringDateSchema,
+    updated_at: clickhouseStringDateSchema,
+    event_ts: clickhouseStringDateSchema,
+  });
+export type BlobStorageFileRefRecordReadType = z.infer<
+  typeof blobStorageFileRefRecordReadSchema
+>;
+export const blobStorageFileLogRecordInsertSchema =
+  blobStorageFileLogRecordBaseSchema.extend({
+    created_at: z.number(),
+    updated_at: z.number(),
+    event_ts: z.number(),
+  });
+export type BlobStorageFileLogInsertType = z.infer<
+  typeof blobStorageFileLogRecordInsertSchema
 >;
 
 export const convertTraceReadToInsert = (
@@ -246,6 +254,7 @@ export const convertPostgresTraceToInsert = (
         : Array.isArray(trace.metadata)
           ? { metadata: trace.metadata }
           : trace.metadata,
+    environment: trace.environment,
     release: trace.release,
     version: trace.version,
     project_id: trace.project_id,
@@ -282,6 +291,7 @@ export const convertPostgresObservationToInsert = (
     project_id: observation.project_id,
     type: observation.type,
     parent_observation_id: observation.parent_observation_id,
+    environment: observation.environment,
     start_time: observation.start_time?.getTime(),
     end_time: observation.end_time?.getTime(),
     name: observation.name,
@@ -344,11 +354,15 @@ export const convertPostgresScoreToInsert = (
     timestamp: score.timestamp?.getTime(),
     project_id: score.project_id,
     trace_id: score.trace_id,
+    session_id: null,
+    dataset_run_id: null,
     observation_id: score.observation_id,
+    environment: score.environment,
     name: score.name,
     value: score.value,
     source: score.source,
     comment: score.comment,
+    metadata: score.metadata ?? {},
     author_user_id: score.author_user_id,
     config_id: score.config_id,
     data_type: score.data_type,

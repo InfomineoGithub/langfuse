@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Button } from "@/src/components/ui/button";
 import { Check, ChevronsDownUp, ChevronsUpDown, Copy } from "lucide-react";
 import { cn } from "@/src/utils/tailwind";
@@ -12,6 +12,8 @@ import { useMarkdownContext } from "@/src/features/theming/useMarkdownContext";
 import { type MediaReturnType } from "@/src/features/media/validation";
 import { LangfuseMediaView } from "@/src/components/ui/LangfuseMediaView";
 import { MarkdownJsonViewHeader } from "@/src/components/ui/MarkdownJsonView";
+import { renderContentWithPromptButtons } from "@/src/features/prompts/components/renderContentWithPromptButtons";
+import { copyTextToClipboard } from "@/src/utils/clipboard";
 
 const IO_TABLE_CHAR_LIMIT = 10000;
 
@@ -25,9 +27,11 @@ export function JSONView(props: {
   collapseStringsAfterLength?: number | null;
   media?: MediaReturnType[];
   scrollable?: boolean;
+  projectIdForPromptButtons?: string;
+  controlButtons?: React.ReactNode;
 }) {
   // some users ingest stringified json nested in json, parse it
-  const parsedJson = deepParseJson(props.json);
+  const parsedJson = useMemo(() => deepParseJson(props.json), [props.json]);
   const { resolvedTheme } = useTheme();
   const { setIsMarkdownEnabled } = useMarkdownContext();
   const capture = usePostHogClientCapture();
@@ -38,7 +42,8 @@ export function JSONView(props: {
       : (props.collapseStringsAfterLength ?? 500);
 
   const handleOnCopy = () => {
-    void navigator.clipboard.writeText(stringifyJsonNode(parsedJson));
+    const textToCopy = stringifyJsonNode(parsedJson);
+    void copyTextToClipboard(textToCopy);
   };
 
   const handleOnValueChange = () => {
@@ -53,7 +58,6 @@ export function JSONView(props: {
       <div
         className={cn(
           "flex gap-2 whitespace-pre-wrap break-words p-3 text-xs",
-          props.codeClassName,
           props.title === "assistant" || props.title === "Output"
             ? "bg-accent-light-green dark:border-accent-dark-green"
             : "",
@@ -61,10 +65,18 @@ export function JSONView(props: {
             ? "bg-primary-foreground"
             : "",
           props.scrollable ? "" : "rounded-sm border",
+          props.codeClassName,
         )}
       >
         {props.isLoading ? (
           <Skeleton className="h-3 w-3/4" />
+        ) : props.projectIdForPromptButtons ? (
+          <code className="whitespace-pre-wrap break-words">
+            {renderContentWithPromptButtons(
+              props.projectIdForPromptButtons,
+              String(parsedJson),
+            )}
+          </code>
         ) : (
           <React18JsonView
             src={parsedJson}
@@ -120,6 +132,7 @@ export function JSONView(props: {
           canEnableMarkdown={props.canEnableMarkdown ?? false}
           handleOnValueChange={handleOnValueChange}
           handleOnCopy={handleOnCopy}
+          controlButtons={props.controlButtons}
         />
       ) : null}
       {props.scrollable ? (
@@ -136,7 +149,7 @@ export function JSONView(props: {
 }
 
 export function CodeView(props: {
-  content: string | undefined | null;
+  content: string | React.ReactNode[] | undefined | null;
   className?: string;
   defaultCollapsed?: boolean;
   title?: string;
@@ -147,7 +160,11 @@ export function CodeView(props: {
 
   const handleCopy = () => {
     setIsCopied(true);
-    void navigator.clipboard.writeText(props.content ?? "");
+    const content =
+      typeof props.content === "string"
+        ? props.content
+        : (props.content?.join("\n") ?? "");
+    void copyTextToClipboard(content);
     setTimeout(() => setIsCopied(false), 1000);
   };
 
@@ -240,7 +257,7 @@ export const IOTableCell = ({
     return <JsonSkeleton className="h-full w-full overflow-hidden px-2 py-1" />;
   }
 
-  const stringifiedJson = data ? stringifyJsonNode(data) : undefined;
+  const stringifiedJson = data !== null && data !== undefined ? stringifyJsonNode(data) : undefined;
 
   // perf: truncate to IO_TABLE_CHAR_LIMIT characters as table becomes unresponsive attempting to render large JSONs with high levels of nesting
   const shouldTruncate =
@@ -251,14 +268,14 @@ export const IOTableCell = ({
       {singleLine ? (
         <div
           className={cn(
-            "h-full w-full self-stretch overflow-hidden overflow-y-auto truncate rounded-sm border px-2 py-0.5",
+            "ph-no-capture h-full w-full self-stretch overflow-hidden overflow-y-auto truncate rounded-sm border px-2 py-0.5",
             className,
           )}
         >
           {stringifiedJson}
         </div>
       ) : shouldTruncate ? (
-        <div className="grid h-full grid-cols-1">
+        <div className="ph-no-capture grid h-full grid-cols-1">
           <JSONView
             json={
               stringifiedJson.slice(0, IO_TABLE_CHAR_LIMIT) +
@@ -275,7 +292,10 @@ export const IOTableCell = ({
       ) : (
         <JSONView
           json={stringifiedJson}
-          className={cn("h-full w-full self-stretch rounded-sm", className)}
+          className={cn(
+            "ph-no-capture h-full w-full self-stretch rounded-sm",
+            className,
+          )}
           codeClassName="py-1 px-2 min-h-0 h-full overflow-y-auto"
           collapseStringsAfterLength={null} // in table, show full strings as row height is fixed
         />
@@ -283,6 +303,8 @@ export const IOTableCell = ({
     </>
   );
 };
+
+export const MemoizedIOTableCell = memo(IOTableCell);
 
 export const JsonSkeleton = ({
   className,

@@ -1,4 +1,4 @@
-import { type z } from "zod";
+import { type z } from "zod/v4";
 import { singleFilter, timeFilter } from "./interfaces/filters";
 
 // to be sent to the server
@@ -33,4 +33,7 @@ export type TableName =
   | "scores"
   | "prompts"
   | "dashboard"
-  | "users";
+  | "widgets"
+  | "users"
+  | "eval_configs"
+  | "job_executions";

@@ -20,15 +20,14 @@ import {
   TabsTrigger,
 } from "@/src/components/ui/tabs";
 import { Textarea } from "@/src/components/ui/textarea";
-import {
-  type CreatePromptTRPCType,
-  PromptType,
-} from "@/src/features/prompts/server/utils/validation";
 import useProjectIdFromURL from "@/src/hooks/useProjectIdFromURL";
 import { api } from "@/src/utils/api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  type CreatePromptTRPCType,
+  PRODUCTION_LABEL,
   type Prompt,
+  PromptType,
   extractVariables,
   getIsCharOrUnderscore,
 } from "@langfuse/shared";
@@ -43,11 +42,11 @@ import {
 import { Input } from "@/src/components/ui/input";
 import Link from "next/link";
 import { ArrowTopRightIcon } from "@radix-ui/react-icons";
-import { PromptDescription } from "@/src/features/prompts/components/prompt-description";
-import { CodeMirrorEditor } from "@/src/components/editor";
-import { PRODUCTION_LABEL } from "@/src/features/prompts/constants";
+import { PromptVariableListPreview } from "@/src/features/prompts/components/PromptVariableListPreview";
+import { CodeMirrorEditor } from "@/src/components/editor/CodeMirrorEditor";
+import { PromptLinkingEditor } from "@/src/components/editor/PromptLinkingEditor";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
-import usePlaygroundCache from "@/src/ee/features/playground/page/hooks/usePlaygroundCache";
+import usePlaygroundCache from "@/src/features/playground/page/hooks/usePlaygroundCache";
 import { useQueryParam } from "use-query-params";
 import { usePromptNameValidation } from "@/src/features/prompts/hooks/usePromptNameValidation";
 
@@ -60,6 +59,7 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
   const { onFormSuccess, initialPrompt } = props;
   const projectId = useProjectIdFromURL();
   const [shouldLoadPlaygroundCache] = useQueryParam("loadPlaygroundCache");
+  const [folderPath] = useQueryParam("folder");
   const [formError, setFormError] = useState<string | null>(null);
   const { playgroundCache } = usePlaygroundCache();
   const [initialMessages, setInitialMessages] = useState<unknown>([]);
@@ -77,7 +77,7 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
     initialPromptVariant = null;
   }
 
-  const defaultValues: NewPromptFormSchemaType = {
+  const defaultValues = {
     type: initialPromptVariant?.type ?? PromptType.Text,
     chatPrompt:
       initialPromptVariant?.type === PromptType.Chat
@@ -87,12 +87,13 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
       initialPromptVariant?.type === PromptType.Text
         ? initialPromptVariant?.prompt
         : "",
-    name: initialPrompt?.name ?? "",
+    name: initialPrompt?.name ?? (folderPath ? `${folderPath}/` : ""),
     config: JSON.stringify(initialPrompt?.config?.valueOf(), null, 2) || "{}",
     isActive: !Boolean(initialPrompt),
+    commitMessage: initialPrompt?.commitMessage ?? undefined,
   };
 
-  const form = useForm<NewPromptFormSchemaType>({
+  const form = useForm({
     resolver: zodResolver(NewPromptFormSchema),
     mode: "onTouched",
     defaultValues,
@@ -166,9 +167,11 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
       .then((newPrompt) => {
         onFormSuccess?.();
         form.reset();
-        void router.push(
-          `/project/${projectId}/prompts/${encodeURIComponent(newPrompt.name)}`,
-        );
+        if ("name" in newPrompt) {
+          void router.push(
+            `/project/${projectId}/prompts/${encodeURIComponent(newPrompt.name)}`,
+          );
+        }
       })
       .catch((error) => {
         console.error(error);
@@ -209,8 +212,20 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
                 <div>
                   <FormItem>
                     <FormLabel>Name</FormLabel>
+                    <FormDescription>
+                      Use slashes &apos;/&apos; in prompt names to organize them
+                      into{" "}
+                      <a
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href="https://langfuse.com/docs/prompts/get-started#prompt-folders-for-organization"
+                      >
+                        <i>folders</i>
+                      </a>
+                      .
+                    </FormDescription>
                     <FormControl>
-                      <Input placeholder="Select a prompt name" {...field} />
+                      <Input placeholder="Name your prompt" {...field} />
                     </FormControl>
                     {/* Custom form message to include a link to the already existing prompt */}
                     {form.getFieldState("name").error ? (
@@ -245,7 +260,8 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
               <code className="text-xs">{"{{variable}}"}</code> to insert
               variables into your prompt.
               <b className="font-semibold"> Note:</b> Variables must be
-              alphabetical characters or underscores.
+              alphabetical characters or underscores. You can also link other
+              text prompts using the plus button.
             </FormDescription>
             <Tabs
               value={form.watch("type")}
@@ -284,11 +300,10 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
                   render={({ field }) => (
                     <>
                       <FormControl>
-                        <CodeMirrorEditor
+                        <PromptLinkingEditor
                           value={field.value}
                           onChange={field.onChange}
-                          editable
-                          mode="prompt"
+                          onBlur={field.onBlur}
                           minHeight={200}
                         />
                       </FormControl>
@@ -306,6 +321,7 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
                       <PromptChatMessages
                         {...field}
                         initialMessages={initialMessages}
+                        projectId={projectId}
                       />
                       <FormMessage />
                     </>
@@ -314,9 +330,7 @@ export const NewPromptForm: React.FC<NewPromptFormProps> = (props) => {
               </TabsContent>
             </Tabs>
           </FormItem>
-          <PromptDescription
-            currentExtractedVariables={currentExtractedVariables}
-          />
+          <PromptVariableListPreview variables={currentExtractedVariables} />
         </>
 
         {/* Prompt Config field */}

@@ -17,13 +17,15 @@
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
 import { type Session } from "next-auth";
 import { tracing } from "@baselime/trpc-opentelemetry-middleware";
-
 import { getServerAuthSession } from "@/src/server/auth";
 import { prisma, Role } from "@langfuse/shared/src/db";
-import * as z from "zod";
+import * as z from "zod/v4";
+import * as opentelemetry from "@opentelemetry/api";
+import { type IncomingHttpHeaders } from "node:http";
 
 type CreateContextOptions = {
   session: Session | null;
+  headers: IncomingHttpHeaders;
 };
 
 /**
@@ -39,6 +41,7 @@ type CreateContextOptions = {
 export const createInnerTRPCContext = (opts: CreateContextOptions) => {
   return {
     session: opts.session,
+    headers: opts.headers,
     prisma,
     DB,
   };
@@ -56,14 +59,15 @@ export const createTRPCContext = async (opts: CreateNextContextOptions) => {
   // Get the session from the server using the getServerSession wrapper function
   const session = await getServerAuthSession({ req, res });
 
+  // Get the headers from the request
+  const headers = req.headers;
+
   addUserToSpan({
     userId: session?.user?.id,
     email: session?.user?.email ?? undefined,
   });
 
-  return createInnerTRPCContext({
-    session,
-  });
+  return createInnerTRPCContext({ session, headers });
 };
 
 /**
@@ -75,13 +79,14 @@ export const createTRPCContext = async (opts: CreateNextContextOptions) => {
  */
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
-import { ZodError } from "zod";
+import { ZodError } from "zod/v4";
 import { setUpSuperjson } from "@/src/utils/superjson";
 import { DB } from "@/src/server/db";
 import {
-  addUserToSpan,
   getTraceById,
   logger,
+  addUserToSpan,
+  contextWithLangfuseProps,
 } from "@langfuse/shared/src/server";
 
 setUpSuperjson();
@@ -119,10 +124,17 @@ const withErrorHandling = t.middleware(async ({ ctx, next }) => {
   const res = await next({ ctx }); // pass the context to the next middleware
 
   if (!res.ok) {
-    logger.error(
-      `middleware intercepted error with code ${res.error.code}`,
-      res.error,
-    );
+    if (res.error.code === "NOT_FOUND" || res.error.code === "UNAUTHORIZED") {
+      logger.info(
+        `middleware intercepted error with code ${res.error.code}`,
+        res.error,
+      );
+    } else {
+      logger.error(
+        `middleware intercepted error with code ${res.error.code}`,
+        res.error,
+      );
+    }
 
     // Throw a new TRPC error with:
     // - The same error code as the original error
@@ -140,10 +152,22 @@ const withErrorHandling = t.middleware(async ({ ctx, next }) => {
   return res;
 });
 
+// otel setup with proper context propagation
+const withOtelInstrumentation = t.middleware(async (opts) => {
+  const baggageCtx = contextWithLangfuseProps({
+    headers: opts.ctx.headers,
+    userId: opts.ctx.session?.user?.id,
+    projectId: (opts.rawInput as Record<string, string>)?.projectId,
+  });
+
+  // Execute the next middleware/procedure with our context
+  return opentelemetry.context.with(baggageCtx, () => opts.next());
+});
+
 // otel setup
-const withOtelTracingProcedure = t.procedure.use(
-  tracing({ collectInput: true, collectResult: true }),
-);
+const withOtelTracingProcedure = t.procedure
+  .use(withOtelInstrumentation)
+  .use(tracing({ collectInput: true, collectResult: true }));
 
 /**
  * Public (unauthenticated) procedure
@@ -177,6 +201,10 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
  * @see https://trpc.io/docs/procedures
  */
 export const protectedProcedure = withOtelTracingProcedure
+  .use(withErrorHandling)
+  .use(enforceUserIsAuthed);
+
+export const protectedProcedureWithoutTracing = t.procedure
   .use(withErrorHandling)
   .use(enforceUserIsAuthed);
 
@@ -243,7 +271,7 @@ const enforceUserIsAuthedAndProjectMember = t.middleware(
         });
       }
       // not a member
-      logger.error(`User is not a member of this project with id ${projectId}`);
+      logger.warn(`User is not a member of this project with id ${projectId}`);
       throw new TRPCError({
         code: "UNAUTHORIZED",
         message: "User is not a member of this project",
@@ -267,6 +295,10 @@ const enforceUserIsAuthedAndProjectMember = t.middleware(
 );
 
 export const protectedProjectProcedure = withOtelTracingProcedure
+  .use(withErrorHandling)
+  .use(enforceUserIsAuthedAndProjectMember);
+
+export const protectedProjectProcedureWithoutTracing = t.procedure
   .use(withErrorHandling)
   .use(enforceUserIsAuthedAndProjectMember);
 
@@ -327,6 +359,7 @@ const inputTraceSchema = z.object({
   traceId: z.string(),
   projectId: z.string(),
   timestamp: z.date().nullish(),
+  fromTimestamp: z.date().nullish(),
 });
 
 const enforceTraceAccess = t.middleware(async ({ ctx, rawInput, next }) => {
@@ -343,8 +376,14 @@ const enforceTraceAccess = t.middleware(async ({ ctx, rawInput, next }) => {
   const traceId = result.data.traceId;
   const projectId = result.data.projectId;
   const timestamp = result.data.timestamp;
+  const fromTimestamp = result.data.fromTimestamp;
 
-  const trace = await getTraceById(traceId, projectId, timestamp ?? undefined);
+  const trace = await getTraceById({
+    traceId,
+    projectId,
+    timestamp: timestamp ?? undefined,
+    fromTimestamp: fromTimestamp ?? undefined,
+  });
 
   if (!trace) {
     logger.error(`Trace with id ${traceId} not found for project ${projectId}`);

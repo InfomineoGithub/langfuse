@@ -46,14 +46,16 @@ export const BreakdownTooltip = ({
   };
 
   const maxDecimals = isCost
-    ? Math.max(...Object.values(aggregatedDetails).map(getMaxDecimals))
+    ? Math.max(
+        ...Object.values(aggregatedDetails).map((v) => getMaxDecimals(v)),
+      )
     : 0;
 
   return (
     <TooltipProvider>
       <Tooltip open={isOpen} onOpenChange={setIsOpen}>
         <TooltipTrigger
-          className="cursor-pointer"
+          className="flex cursor-pointer"
           onClick={() => setIsOpen(!isOpen)}
         >
           {children}

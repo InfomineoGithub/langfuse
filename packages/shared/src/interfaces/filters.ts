@@ -1,9 +1,11 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 
+// Make sure to update the InMemoryFilterService if you add new filter types
 export const filterOperators = {
   datetime: [">", "<", ">=", "<="],
   string: ["=", "contains", "does not contain", "starts with", "ends with"],
   stringOptions: ["any of", "none of"],
+  categoryOptions: ["any of", "none of"],
   arrayOptions: ["any of", "none of", "all of"],
   number: ["=", ">", "<", ">=", "<="],
   stringObject: [
@@ -75,11 +77,19 @@ export const nullFilter = z.object({
   operator: z.enum(filterOperators.null),
   value: z.literal(""),
 });
+export const categoryOptionsFilter = z.object({
+  type: z.literal("categoryOptions"),
+  column: z.string(),
+  key: z.string(),
+  operator: z.enum(filterOperators.categoryOptions),
+  value: z.array(z.string()),
+});
 export const singleFilter = z.discriminatedUnion("type", [
   timeFilter,
   stringFilter,
   numberFilter,
   stringOptionsFilter,
+  categoryOptionsFilter,
   arrayOptionsFilter,
   stringObjectFilter,
   numberObjectFilter,

@@ -1,9 +1,9 @@
 // This structure is maintained to relate the frontend table definitions with the clickhouse table definitions.
 // The frontend only sends the column names to the backend. This needs to be changed in the future to send column IDs.
 
-import { UiColumnMapping } from "./types";
+import { UiColumnMappings } from "./types";
 
-export const observationsTableTraceUiColumnDefinitions: UiColumnMapping[] = [
+export const observationsTableTraceUiColumnDefinitions: UiColumnMappings = [
   {
     uiTableName: "Trace Tags",
     uiTableId: "traceTags",
@@ -22,10 +22,22 @@ export const observationsTableTraceUiColumnDefinitions: UiColumnMapping[] = [
     clickhouseTableName: "traces",
     clickhouseSelect: 't."name"',
   },
+  {
+    uiTableName: "Trace Environment",
+    uiTableId: "traceEnvironment",
+    clickhouseTableName: "traces",
+    clickhouseSelect: 't."environment"',
+  },
 ];
 
-export const observationsTableUiColumnDefinitions: UiColumnMapping[] = [
+export const observationsTableUiColumnDefinitions: UiColumnMappings = [
   ...observationsTableTraceUiColumnDefinitions,
+  {
+    uiTableName: "Environment",
+    uiTableId: "environment",
+    clickhouseTableName: "observations",
+    clickhouseSelect: 'o."environment"',
+  },
   {
     uiTableName: "type",
     uiTableId: "type",
@@ -164,8 +176,8 @@ export const observationsTableUiColumnDefinitions: UiColumnMapping[] = [
     clickhouseTypeOverwrite: "Decimal64(3)",
   },
   {
-    uiTableName: "Usage",
-    uiTableId: "usage",
+    uiTableName: "Tokens",
+    uiTableId: "tokens",
     clickhouseTableName: "observations",
     clickhouseSelect:
       "if(mapExists((k, v) -> (k = 'total'), usage_details), usage_details['total'], NULL)",
@@ -177,11 +189,25 @@ export const observationsTableUiColumnDefinitions: UiColumnMapping[] = [
     clickhouseTableName: "observations",
     clickhouseSelect: 'o."metadata"',
   },
+  // Scores column duplicated to allow renaming column name. Will be removed once session storage cache is outdated
+  // Column names are cached in user sessions - changing them breaks existing filters
   {
     uiTableName: "Scores",
     uiTableId: "scores",
-    clickhouseTableName: "observations",
-    clickhouseSelect: "s_avg.scores_avg",
+    clickhouseTableName: "scores",
+    clickhouseSelect: "s.scores_avg",
+  },
+  {
+    uiTableName: "Scores (numeric)",
+    uiTableId: "scores",
+    clickhouseTableName: "scores",
+    clickhouseSelect: "s.scores_avg",
+  },
+  {
+    uiTableName: "Scores (categorical)",
+    uiTableId: "scores",
+    clickhouseTableName: "scores",
+    clickhouseSelect: "s.score_categories",
   },
   {
     uiTableName: "Version",

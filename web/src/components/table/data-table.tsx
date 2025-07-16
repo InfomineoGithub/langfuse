@@ -1,10 +1,10 @@
 "use client";
 import { type OrderByState } from "@langfuse/shared";
-import React, { useState, useMemo } from "react";
-
+import React, { useState, useMemo, useCallback } from "react";
 import DocPopup from "@/src/components/layouts/doc-popup";
 import { DataTablePagination } from "@/src/components/table/data-table-pagination";
 import {
+  type CustomHeights,
   type RowHeight,
   getRowHeightTailwindClass,
 } from "@/src/components/table/data-table-row-height-switch";
@@ -31,7 +31,13 @@ import {
   type PaginationState,
   type RowSelectionState,
   type VisibilityState,
+  type Row,
 } from "@tanstack/react-table";
+import { TablePeekView } from "@/src/components/table/peek";
+import { type PeekViewProps } from "@/src/components/table/peek/hooks/usePeekView";
+import { usePeekView } from "@/src/components/table/peek/hooks/usePeekView";
+import { isEqual } from "lodash";
+import { useRouter } from "next/router";
 
 interface DataTableProps<TData, TValue> {
   columns: LangfuseColumnDef<TData, TValue>[];
@@ -52,11 +58,13 @@ interface DataTableProps<TData, TValue> {
   setOrderBy?: (s: OrderByState) => void;
   help?: { description: string; href: string };
   rowHeight?: RowHeight;
+  customRowHeights?: CustomHeights;
   className?: string;
-  paginationClassName?: string;
-  isBorderless?: boolean;
   shouldRenderGroupHeaders?: boolean;
   onRowClick?: (row: TData) => void;
+  peekView?: PeekViewProps<TData>;
+  pinFirstColumn?: boolean;
+  hidePagination?: boolean;
 }
 
 export interface AsyncTableData<T> {
@@ -105,16 +113,17 @@ export function DataTable<TData extends object, TValue>({
   orderBy,
   setOrderBy,
   rowHeight,
+  customRowHeights,
   className,
-  paginationClassName,
-  isBorderless = false,
   shouldRenderGroupHeaders = false,
   onRowClick,
+  peekView,
+  pinFirstColumn = false,
+  hidePagination = false,
 }: DataTableProps<TData, TValue>) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const rowheighttw = getRowHeightTailwindClass(rowHeight);
+  const rowheighttw = getRowHeightTailwindClass(rowHeight, customRowHeights);
   const capture = usePostHogClientCapture();
-
   const flattedColumnsByGroup = useMemo(() => {
     const flatColumnsByGroup = new Map<string, string[]>();
 
@@ -170,6 +179,31 @@ export function DataTable<TData extends object, TValue>({
     columnResizeMode: "onChange",
   });
 
+  const getRowMemoized = useCallback(
+    (id: string) => table.getRow(id)?.original,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const {
+    row: peekRow,
+    handleOnRowClickPeek,
+    peekViewId,
+  } = usePeekView({
+    getRow: getRowMemoized,
+    peekView,
+  });
+
+  const handleOnRowClick = useCallback(
+    (row: TData) => {
+      handleOnRowClickPeek?.(row);
+      onRowClick?.(row);
+    },
+    [handleOnRowClickPeek, onRowClick],
+  );
+
+  const hasRowClickAction = !!onRowClick || !!peekView;
+
   // memo column sizes for performance
   // https://tanstack.com/table/v8/docs/guide/column-sizing#advanced-column-resizing-performance
   const columnSizeVars = useMemo(() => {
@@ -200,15 +234,12 @@ export function DataTable<TData extends object, TValue>({
     <>
       <div
         className={cn(
-          "flex w-full max-w-full flex-1 flex-col gap-1 overflow-auto",
+          "flex w-full max-w-full flex-1 flex-col overflow-auto",
           className,
         )}
       >
         <div
-          className={cn(
-            "w-full overflow-auto",
-            isBorderless ? "" : "rounded-md border",
-          )}
+          className={cn("relative w-full overflow-auto border-t")}
           style={{ ...columnSizeVars }}
         >
           <Table>
@@ -234,6 +265,9 @@ export function DataTable<TData extends object, TValue>({
                         className={cn(
                           "group p-1 first:pl-2",
                           sortingEnabled && "cursor-pointer",
+                          pinFirstColumn &&
+                            header.index === 0 &&
+                            "sticky left-0 z-20 border-r bg-background",
                         )}
                         style={{ width }}
                         onClick={(event) => {
@@ -314,14 +348,22 @@ export function DataTable<TData extends object, TValue>({
                 </TableRow>
               ))}
             </TableHeader>
-            {table.getState().columnSizingInfo.isResizingColumn ? (
+            {table.getState().columnSizingInfo.isResizingColumn ||
+            !!peekView ? (
               <MemoizedTableBody
                 table={table}
                 rowheighttw={rowheighttw}
                 columns={columns}
                 data={data}
                 help={help}
-                onRowClick={onRowClick}
+                onRowClick={hasRowClickAction ? handleOnRowClick : undefined}
+                pinFirstColumn={pinFirstColumn}
+                tableSnapshot={{
+                  tableDataUpdatedAt: peekView?.tableDataUpdatedAt,
+                  columnVisibility,
+                  columnOrder,
+                  rowSelection,
+                }}
               />
             ) : (
               <TableBodyComponent
@@ -330,18 +372,25 @@ export function DataTable<TData extends object, TValue>({
                 columns={columns}
                 data={data}
                 help={help}
-                onRowClick={onRowClick}
+                onRowClick={hasRowClickAction ? handleOnRowClick : undefined}
+                pinFirstColumn={pinFirstColumn}
               />
             )}
           </Table>
         </div>
         <div className="grow"></div>
       </div>
-      {pagination !== undefined ? (
+      {peekView && (
+        <TablePeekView
+          peekView={peekView}
+          row={peekRow}
+          selectedRowId={peekViewId}
+        />
+      )}
+      {!hidePagination && pagination !== undefined ? (
         <div
           className={cn(
-            "sticky bottom-0 z-10 flex w-full justify-end bg-background font-medium",
-            paginationClassName,
+            "sticky bottom-0 z-10 flex w-full justify-end border-t bg-background py-2 pr-2 font-medium",
           )}
         >
           <DataTablePagination
@@ -373,6 +422,44 @@ interface TableBodyComponentProps<TData> {
   data: AsyncTableData<TData[]>;
   help?: { description: string; href: string };
   onRowClick?: (row: TData) => void;
+  pinFirstColumn?: boolean;
+  tableSnapshot?: {
+    tableDataUpdatedAt?: number;
+    columnVisibility?: VisibilityState;
+    columnOrder?: ColumnOrderState;
+    rowSelection?: RowSelectionState;
+  };
+}
+
+function TableRowComponent<TData>({
+  row,
+  onRowClick,
+  children,
+}: {
+  row: Row<TData>;
+  onRowClick?: (row: TData) => void;
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const selectedRowId = router.query.peek as string | undefined;
+  return (
+    <TableRow
+      data-row-index={row.index}
+      onClick={() => onRowClick?.(row.original)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          onRowClick?.(row.original);
+        }
+      }}
+      className={cn(
+        "hover:bg-accent",
+        !!onRowClick ? "cursor-pointer" : "cursor-default",
+        selectedRowId && selectedRowId === row.id ? "bg-accent" : undefined,
+      )}
+    >
+      {children}
+    </TableRow>
+  );
 }
 
 function TableBodyComponent<TData>({
@@ -382,6 +469,7 @@ function TableBodyComponent<TData>({
   data,
   help,
   onRowClick,
+  pinFirstColumn = false,
 }: TableBodyComponentProps<TData>) {
   return (
     <TableBody>
@@ -396,19 +484,16 @@ function TableBodyComponent<TData>({
         </TableRow>
       ) : table.getRowModel().rows.length ? (
         table.getRowModel().rows.map((row) => (
-          <TableRow
-            key={row.id}
-            onClick={() => onRowClick?.(row.original)}
-            className={
-              onRowClick ? "cursor-pointer hover:bg-accent" : undefined
-            }
-          >
+          <TableRowComponent key={row.id} row={row} onRowClick={onRowClick}>
             {row.getVisibleCells().map((cell) => (
               <TableCell
                 key={cell.id}
                 className={cn(
                   "overflow-hidden border-b p-1 text-xs first:pl-2",
                   rowheighttw === "s" && "whitespace-nowrap",
+                  pinFirstColumn &&
+                    cell.column.getIndex() === 0 &&
+                    "sticky left-0 border-r bg-background",
                 )}
                 style={{
                   width: `calc(var(--col-${cell.column.id}-size) * 1px)`,
@@ -419,12 +504,12 @@ function TableBodyComponent<TData>({
                 </div>
               </TableCell>
             ))}
-          </TableRow>
+          </TableRowComponent>
         ))
       ) : (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={columns.length} className="relative h-24">
-            <div className="pointer-events-none fixed left-[50%] flex -translate-y-1/2 items-center justify-center">
+          <TableCell colSpan={columns.length} className="h-24">
+            <div className="pointer-events-none absolute left-[50%] flex -translate-y-1/2 items-center justify-center">
               No results.{" "}
               {help && (
                 <DocPopup description={help.description} href={help.href} />
@@ -437,8 +522,52 @@ function TableBodyComponent<TData>({
   );
 }
 
-// memo tables for performance, should only re-render when data changes
-// https://tanstack.com/table/v8/docs/guide/column-sizing#advanced-column-resizing-performance
+// Optimize table rendering performance by memoizing the table body
+// This is critical for two high-frequency re-render scenarios:
+// 1. During column resizing: When users drag column headers, it can trigger
+//    many state updates that would otherwise cause the entire table to re-render.
+// 2. When using peek views: URL/state changes from peek view navigation would
+//    otherwise cause unnecessary table re-renders.
+//
+// We need to ensure the table re-renders when:
+// - The actual data changes (including metrics loaded asynchronously and pagination state)
+// - The loading state changes
+// - The new column widths are computed
+// - The row height changes
+// - The number of visible cells changes
+// - The column order changes
+//
+// See: https://tanstack.com/table/v8/docs/guide/column-sizing#advanced-column-resizing-performance
 const MemoizedTableBody = React.memo(TableBodyComponent, (prev, next) => {
-  return prev.table.options.data === next.table.options.data;
+  if (!prev.tableSnapshot || !next.tableSnapshot)
+    return !prev.tableSnapshot && !next.tableSnapshot;
+
+  // Check reference equality first (faster)
+  if (
+    prev.tableSnapshot.tableDataUpdatedAt !==
+    next.tableSnapshot.tableDataUpdatedAt
+  ) {
+    return false;
+  }
+  if (prev.table.options.data !== next.table.options.data) return false;
+  if (prev.data.isLoading !== next.data.isLoading) return false;
+  if (prev.rowheighttw !== next.rowheighttw) return false;
+
+  // Then do more expensive deep equality checks
+  if (
+    !isEqual(prev.tableSnapshot.rowSelection, next.tableSnapshot.rowSelection)
+  )
+    return false;
+  if (
+    !isEqual(
+      prev.tableSnapshot.columnVisibility,
+      next.tableSnapshot.columnVisibility,
+    )
+  )
+    return false;
+  if (!isEqual(prev.tableSnapshot.columnOrder, next.tableSnapshot.columnOrder))
+    return false;
+
+  // If all checks pass, components are equal
+  return true;
 }) as typeof TableBodyComponent;

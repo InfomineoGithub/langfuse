@@ -1,5 +1,6 @@
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -24,7 +25,7 @@ import { type TableAction } from "@/src/features/table/types";
 import { TableActionTargetOptions } from "@/src/features/table/components/TableActionTargetOptions";
 import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import { ActionButton } from "@/src/components/ActionButton";
-import { useHasEntitlement } from "@/src/features/entitlements/hooks";
+import { useOptionalEntitlement } from "@/src/features/entitlements/hooks";
 import { useSelectAll } from "@/src/features/table/hooks/useSelectAll";
 import { type BatchExportTableName } from "@langfuse/shared";
 import { api } from "@/src/utils/api";
@@ -50,7 +51,7 @@ export function TableActionDialog({
     scope: action.accessCheck.scope,
   });
   const { setSelectAll } = useSelectAll(projectId, tableName);
-  const hasEntitlement = useHasEntitlement(action.accessCheck.entitlement);
+  const hasEntitlement = useOptionalEntitlement(action.accessCheck.entitlement);
   const form = useForm({ defaultValues: { targetId: "" } });
 
   const isInProgress = api.table.getIsBatchActionInProgress.useQuery(
@@ -84,31 +85,33 @@ export function TableActionDialog({
               className="space-y-6"
               onSubmit={form.handleSubmit(handleConfirm)}
             >
-              <FormField
-                control={form.control}
-                name="targetId"
-                render={({ field }) => (
-                  <FormItem>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <TableActionTargetOptions
-                          action={action}
-                          projectId={projectId}
-                        />
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DialogBody>
+                <FormField
+                  control={form.control}
+                  name="targetId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <TableActionTargetOptions
+                            action={action}
+                            projectId={projectId}
+                          />
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </DialogBody>
               <DialogFooter>
                 {isInProgress.data && (
                   <div className="flex items-center gap-1">
@@ -123,7 +126,7 @@ export function TableActionDialog({
                   hasAccess={hasAccess}
                   hasEntitlement={hasEntitlement}
                   loading={isInProgress.isLoading}
-                  disabled={isInProgress.data}
+                  disabled={isInProgress.data || !form.watch("targetId")}
                 >
                   Confirm
                 </ActionButton>

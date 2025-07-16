@@ -8,7 +8,7 @@ import {
   LegacyPromptSchema,
   PromptType,
   type LegacyValidatedPrompt,
-} from "@/src/features/prompts/server/utils/validation";
+} from "@langfuse/shared";
 import { getObservationById } from "@langfuse/shared/src/server";
 
 describe("/api/public/prompts API Endpoint", () => {
@@ -464,7 +464,10 @@ describe("/api/public/prompts API Endpoint", () => {
     // Delay to allow for async processing
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const dbGeneration = await getObservationById(generationId, projectId);
+    const dbGeneration = await getObservationById({
+      id: generationId,
+      projectId,
+    });
 
     expect(dbGeneration?.id).toBe(generationId);
     expect(dbGeneration?.promptId).toBe(promptId);
@@ -522,13 +525,12 @@ describe("/api/public/prompts API Endpoint", () => {
 
     expect(response.status).toBe(207);
 
-    const dbGeneration = await prisma.observation.findUnique({
-      where: {
+    expect(
+      getObservationById({
         id: generationId,
-      },
-    });
-
-    expect(dbGeneration).toBeNull();
+        projectId: "7a88fb47-b4e2-43b8-a06c-a5ce950dc53a",
+      }),
+    ).rejects.toThrow("not found");
   });
 
   it("should create empty object if no config is provided", async () => {

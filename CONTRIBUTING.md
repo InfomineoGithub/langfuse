@@ -27,7 +27,7 @@ The maintainers are available on [Discord](https://langfuse.com/discord) in case
 
 ## Making a change
 
-_Before making any significant changes, please [open an issue](https://github.com/langfuse/langfuse/issues)._ Discussing your proposed changes ahead of time will make the contribution process smooth for everyone. Large changes that were not discussed in an issue may be rejected.
+_Before making any significant changes, please [open an issue](https://github.com/langfuse/langfuse/issues)._ Discussing your proposed changes ahead of time will make the contribution process smooth for everyone. Changes that were not discussed in an issue may be rejected.
 
 Once we've discussed your changes and you've got your code ready, make sure that tests are passing and open your pull request.
 
@@ -42,7 +42,7 @@ A good first step is to search for open [issues](https://github.com/langfuse/lan
   - NextAuth.js / Auth.js
   - tRPC: Frontend APIs
   - Prisma ORM
-  - Zod
+  - Zod v4
   - Tailwind CSS
   - shadcn/ui tailwind components (using Radix and tanstack)
   - Fern: generate OpenAPI spec and Pydantic models
@@ -53,128 +53,35 @@ A good first step is to search for open [issues](https://github.com/langfuse/lan
 
 ### Architecture Overview
 
-**Langfuse v2**
-
-```mermaid
-flowchart TB
-    subgraph s4["Clients"]
-        subgraph s2["langfuse/langfuse-python"]
-            Python["Python low-level SDK"]
-            Decorator["observe() decorator"] -->|extends| Python
-            OAI["OpenAI drop-in replacement"] -->|extends| Python
-            Llamaindex["LlamaIndex Integration"] -->|extends| Python
-            LCPYTHON["Langchain Python Integration"] -->|extends| Python
-            Langflow -->|uses| LCPYTHON
-            LiteLLM -->|uses| Python
-        end
-        subgraph s3["langfuse/langfuse-js"]
-            JS["JS SDK"]
-            LCJS["Langchain JS Integration"]  -->|extends| JS
-            Flowise -->|uses| LCJS
-        end
-    end
-
-    DB[Postgres Database]
-    Redis[Redis]
-
-    subgraph s1["Application (langfuse/langfuse/web)"]
-        API[Public HTTP API]
-        G[TRPC API]
-        I[NextAuth]
-        H[React Frontend]
-        Prisma[Prisma ORM]
-        H --> G
-        H --> I
-        G --> I
-        G --- Prisma
-        API --- Prisma
-        I --- Prisma
-    end
-
-    Prisma --- DB
-    JS --- API
-    Python --- API
-```
-
-**Langfuse v3 (work in progress, not released yet)**
-
-> [!NOTE]
-> Infrastructure will change in Langfuse version 3.0. More in the [GitHub Discussions](https://github.com/orgs/langfuse/discussions/1902).
-> `langfuse/langfuse/worker` is under active development and not recommended for production use in Langfuse 2.x.
-
-```mermaid
-flowchart TB
-    subgraph s4["Clients"]
-        subgraph s2["langfuse/langfuse-python"]
-            Python["Python low-level SDK"]
-            Decorator["observe() decorator"] -->|extends| Python
-            OAI["OpenAI drop-in replacement"] -->|extends| Python
-            Llamaindex["LlamaIndex Integration"] -->|extends| Python
-            LCPYTHON["Langchain Python Integration"] -->|extends| Python
-            Langflow -->|uses| LCPYTHON
-            LiteLLM -->|uses| Python
-        end
-        subgraph s3["langfuse/langfuse-js"]
-            JS["JS SDK"]
-            LCJS["Langchain JS Integration"]  -->|extends| JS
-            Flowise -->|uses| LCJS
-        end
-    end
-
-    subgraph s9 ["VPC (US and EU separated)"]
-        DB[Postgres Database]
-        Redis[Redis Cache/Queue]
-        Clickhouse[Clickhouse Database]
-
-        subgraph s1["Application (langfuse/langfuse/web)"]
-            API[Public HTTP API]
-            G[TRPC API]
-            I[NextAuth]
-            H[React Frontend]
-            ORM
-            H --> G
-            H --> I
-            G --> I
-            G --- ORM
-            API --- ORM
-            I --- ORM
-        end
-
-        subgraph s5["Application (langfuse/langfuse/worker)"]
-            Worker
-        end
-
-        Worker --- DB
-        Worker --- Redis
-        Worker --- Clickhouse
-
-        ORM --- DB
-        ORM --- Redis
-        ORM --- Clickhouse
-
-
-    end
-
-    JS --- API
-    Python --- API
-```
+See this [diagram](https://langfuse.com/self-hosting#architecture) for an overview of the architecture.
 
 ### Network Overview
 
-> [!NOTE]
-> This will change in Langfuse version 3.0. More in the [GitHub Discussions](https://github.com/orgs/langfuse/discussions/1902).
-
 ```mermaid
-flowchart LR
-   Browser ---|Web UI & TRPC API| App
-   Integrations/SDKs ---|Public HTTP API| App
-   subgraph i1["Application Network"]
-      App["Langfuse Application"]
-   end
-   subgraph i2["Database Network"]
-      DB["Postgres Database"]
-   end
-   App --- DB
+flowchart TB
+    User["UI, API, SDKs"]
+    subgraph vpc["VPC"]
+        Web["Web Server<br/>(langfuse/langfuse)"]
+        Worker["Async Worker<br/>(langfuse/worker)"]
+        Postgres["Postgres - OLTP<br/>(Transactional Data)"]
+        Cache["Redis/Valkey<br/>(Cache, Queue)"]
+        Clickhouse["Clickhouse - OLAP<br/>(Observability Data)"]
+        S3["S3 / Blob Storage<br/>(Raw events, multi-modal attachments)"]
+    end
+    LLM["LLM API/Gateway<br/>(optional)"]
+
+    User --> Web
+    Web --> S3
+    Web --> Postgres
+    Web --> Cache
+    Web --> Clickhouse
+    Web -.->|"optional for playground"| LLM
+
+    Cache --> Worker
+    Worker --> Clickhouse
+    Worker --> Postgres
+    Worker --> S3
+    Worker -.->|"optional for evals"| LLM
 ```
 
 ### Database Overview
@@ -190,7 +97,7 @@ Full database schema: [packages/shared/prisma/schema.prisma](packages/shared/pri
 We built a monorepo using [pnpm](https://pnpm.io/motivation) and [turbo](https://turbo.build/repo/docs) to manage the dependencies and build process. The monorepo contains the following packages:
 
 - `web`: is the main application package providing Frontend and Backend APIs for Langfuse.
-- `worker` (no production yet): contains an application for asynchronous processing of tasks. This package is not yet used in production.
+- `worker`: contains an application for asynchronous processing of tasks.
 - `packages`:
   - `shared`: contains shared code between the above packages.
   - `config-eslint`: contains eslint configurations which are shared between the above packages.
@@ -209,11 +116,12 @@ Requirements
 
 **Steps**
 
-1. Fork the repository and clone it locally
-2. Run the development database
+1. Install [golang-migrate](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate#migrate-cli) as CLI
+2. Fork the repository and clone it locally
 
    ```bash
-   pnpm run infra:dev:up
+   git clone https://github.com/langfuse/langfuse.git
+   cd langfuse
    ```
 
 3. Create an env file
@@ -222,40 +130,30 @@ Requirements
     cp .env.dev.example .env
    ```
 
-4. Install dependencies
+4. Run the entire infrastructure in dev mode. **Note**: if you have an existing database, this command wipes it.
 
    ```bash
-   pnpm install
+   pnpm run dx # first run only (resets db, node_modules, ...)
+   pnpm run dev # any subsequent runs
    ```
 
-5. Run the migrations
+   You will be asked whether you want to reset Postgres and ClickHouse. Confirm both with 'Y' and press enter.
 
-   All database migrations and configs are in the `shared` package.
+5. Open the web app in your browser to start using Langfuse:
 
-   ```bash
-   pnpm --filter=shared run db:migrate
+   - [Sign up page, http://localhost:3000](http://localhost:3000)
+   - [Demo project, http://localhost:3000/project/7a88fb47-b4e2-43b8-a06c-a5ce950dc53a](http://localhost:3000/project/7a88fb47-b4e2-43b8-a06c-a5ce950dc53a)
 
-   # Optional: seed the database
-   # pnpm run db:seed
-   # pnpm run db:seed:examples
-   # pnpm --filter=shared run db:seed:load
-   ```
+6. Log in as a test user:
 
-6. Start the development server
+   - Username: `demo@langfuse.com`
+   - Password: `password`
 
-   ```bash
-    pnpm run dev
-   ```
 
-7. Open the web app in the browser:
-
-   http://localhost:3000
-
-8. Log in as a test user (after you ran `db:seed` command):
-
-   Username: demo@langfuse.com
-
-   Password: password
+To get comprehensive example data, you can use the `seed` command:
+```sh
+pnpm run db:seed:examples
+```
 
 ## Monorepo quickstart
 
@@ -306,23 +204,41 @@ Requirements
 
 On the main branch, we adhere to the best practices of [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/). All pull requests and branches are squash-merged to maintain a clean and readable history. This approach ensures the addition of a conventional commit message when merging contributions.
 
-## Test the public API
+## Running Unit Tests
 
-The API is tested using Jest. With the development server running, you can run the tests with:
+All tests run in the CI and must pass before merging.
+All tests run against a running langfuse instance and **write/delete real data from the database**.
 
-Run all
+### Tests in the `web` package (public API)
+We're using Jest with in the `web` package. Therefore, if you want to provide an argument to the test runner, do it directly without an intermittent ` -- `.
 
-```bash
-npm run test
+There are three types of unit tests:
+- `test-sync`
+- `test-async`
+- `test-client`
+
+To run a specific test, for example the test: `"should handle special characters in prompt names"` in `prompts.v2.servertest.ts`, run:
+```sh
+cd web  # or with --filter=web
+pnpm test-sync --testPathPattern="prompts\.v2\.servertest" --testNamePattern="should handle special characters in prompt names"
 ```
 
-Run interactively in watch mode
-
-```bash
-npm run test:watch
+To run all tests:
+```sh
+pnpm run test
 ```
 
-These tests are also run in CI.
+Run interactively in watch mode (not recommended!)
+```sh
+pnpm run test:watch
+```
+
+### Tests in the `worker` package
+For the `worker` package, we're using `vitest` to run unit tests.
+
+```sh
+pnpm run test --filter=worker -- FILE_YOU_WANT_TO_TEST.ts -t "test name"
+```
 
 ## CI/CD
 
@@ -449,6 +365,20 @@ Please note that
 ### Transition period until V3 release
 
 Until the V3 release, both the JSON record must be updated **and** a migration must be created to continue supporting self-hosted users. Note that the migration must updated both the `models` as well as the `prices` table accordingly.
+
+## Updating the OpenAPI Specs & fern SDKs
+
+We maintain the API specifications manually to guarantee a high degree of understandability. If you made changes to the API, please update the respective `.yml` files in `fern/apis/...`.
+
+To generate the respective `openapi.yml` files which power the online API reference & SDKs, run:
+
+```sh
+npx fern-api generate --api server  # for the server API
+npx fern-api generate --api client  # for the client API
+npx fern-api generate --api organizations  # for the organizations API
+```
+
+**Note:** You need a signed in fern account to run those commands.
 
 ## License
 

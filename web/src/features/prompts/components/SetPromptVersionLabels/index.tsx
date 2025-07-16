@@ -15,10 +15,9 @@ import {
 import { useHasProjectAccess } from "@/src/features/rbac/utils/checkProjectAccess";
 import useProjectIdFromURL from "@/src/hooks/useProjectIdFromURL";
 import { api } from "@/src/utils/api";
-import { type Prompt } from "@langfuse/shared";
+import { PRODUCTION_LABEL, type Prompt } from "@langfuse/shared";
 import { AddLabelForm } from "./AddLabelForm";
 import { LabelCommandItem } from "./LabelCommandItem";
-import { PRODUCTION_LABEL } from "@/src/features/prompts/constants";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { isReservedPromptLabel } from "@/src/features/prompts/utils";
 import { StatusBadge } from "@/src/components/layouts/status-badge";
@@ -47,6 +46,9 @@ export function SetPromptVersionLabels({
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
   const [isAddingLabel, setIsAddingLabel] = useState(false);
+  const labelsChanged =
+    JSON.stringify([...selectedLabels].sort()) !==
+    JSON.stringify([...prompt.labels].sort());
   const customLabelScrollRef = useRef<HTMLDivElement | null>(null);
 
   const usedLabelsInProject = api.prompts.allLabels.useQuery(
@@ -87,19 +89,23 @@ export function SetPromptVersionLabels({
   });
 
   const handleSubmitLabels = async () => {
-    if (!projectId) {
-      alert("Project ID is missing");
-      return;
+    try {
+      if (!projectId) {
+        alert("Project ID is missing");
+        return;
+      }
+
+      await mutatePromptVersionLabels.mutateAsync({
+        projectId: projectId as string,
+        promptId: prompt.id,
+        labels: selectedLabels,
+      });
+
+      capture("prompt_detail:apply_labels", { labels: selectedLabels });
+      setIsOpen(false);
+    } catch (err) {
+      console.error(err);
     }
-
-    await mutatePromptVersionLabels.mutateAsync({
-      projectId: projectId as string,
-      promptId: prompt.id,
-      labels: selectedLabels,
-    });
-
-    capture("prompt_detail:apply_labels", { labels: selectedLabels });
-    setIsOpen(false);
   };
 
   const handleOnOpenChange = (open: boolean) => {
@@ -112,7 +118,7 @@ export function SetPromptVersionLabels({
       <PopoverTrigger asChild data-version-trigger="true">
         <div
           className={cn(
-            "flex min-w-0 max-w-full cursor-pointer flex-wrap gap-1",
+            "flex w-fit min-w-0 max-w-full cursor-pointer flex-wrap gap-1",
             !hasAccess && "cursor-not-allowed",
           )}
         >
@@ -125,27 +131,24 @@ export function SetPromptVersionLabels({
               isLive={label === PRODUCTION_LABEL}
             />
           ))}
-          {promptLabels.length === 0 && (
-            <Button
-              variant="outline"
-              className={cn(
-                "h-6 w-6 bg-muted-gray text-primary",
-                showOnlyOnHover && "opacity-0 group-hover:opacity-100",
-                !hasAccess && "cursor-not-allowed group-hover:opacity-50",
-              )}
-            >
-              <CircleFadingArrowUp className="h-3.5 w-3.5 shrink-0" />
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            title="Add prompt version label"
+            className={cn(
+              "h-6 w-6 bg-muted-gray text-primary",
+              showOnlyOnHover && "opacity-0 group-hover:opacity-100",
+              !hasAccess && "cursor-not-allowed group-hover:opacity-50",
+            )}
+          >
+            <CircleFadingArrowUp className="h-3.5 w-3.5 shrink-0" />
+          </Button>
         </div>
       </PopoverTrigger>
       <PopoverContent
-        className="fixed max-h-[50vh] overflow-y-auto"
-        style={{
-          top: "var(--popover-top)",
-          left: "var(--popover-left)",
-          transform: "none",
-        }}
+        className="max-w-[90vw] sm:max-w-md"
+        align="start"
+        side="bottom"
+        sideOffset={5}
       >
         <div
           onClick={(event) => event.stopPropagation()}
@@ -224,6 +227,7 @@ export function SetPromptVersionLabels({
                 : "default"
             }
             loading={mutatePromptVersionLabels.isLoading}
+            disabled={!labelsChanged}
             className="w-full"
             onClick={handleSubmitLabels}
           >

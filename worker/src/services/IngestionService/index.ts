@@ -1,7 +1,6 @@
-import { Redis } from "ioredis";
+import { Cluster, Redis } from "ioredis";
 import { v4 } from "uuid";
 import { Prisma } from "@prisma/client";
-
 import {
   LangfuseNotFoundError,
   Model,
@@ -11,12 +10,12 @@ import {
 } from "@langfuse/shared";
 import {
   ClickhouseClientType,
-  IngestionEntityTypes,
+  convertDateToClickhouseDateTime,
   convertObservationReadToInsert,
   convertScoreReadToInsert,
   convertTraceReadToInsert,
   eventTypes,
-  findModel,
+  IngestionEntityTypes,
   IngestionEventType,
   instrumentAsync,
   logger,
@@ -25,6 +24,8 @@ import {
   ObservationRecordInsertType,
   observationRecordReadSchema,
   PromptService,
+  QueueJobs,
+  recordIncrement,
   ScoreEventType,
   scoreRecordInsertSchema,
   ScoreRecordInsertType,
@@ -33,12 +34,9 @@ import {
   traceRecordInsertSchema,
   TraceRecordInsertType,
   traceRecordReadSchema,
-  validateAndInflateScore,
-  UsageCostType,
-  convertDateToClickhouseDateTime,
   TraceUpsertQueue,
-  QueueJobs,
-  recordIncrement,
+  UsageCostType,
+  validateAndInflateScore,
 } from "@langfuse/shared/src/server";
 
 import { tokenCount } from "../../features/tokenisation/usage";
@@ -50,6 +48,8 @@ import {
 } from "./utils";
 import { randomUUID } from "crypto";
 import { env } from "../../env";
+import { findModel } from "../modelMatch";
+import { SpanKind } from "@opentelemetry/api";
 
 type InsertRecord =
   | TraceRecordInsertType
@@ -61,13 +61,20 @@ const immutableEntityKeys: {
   [TableName.Scores]: (keyof ScoreRecordInsertType)[];
   [TableName.Observations]: (keyof ObservationRecordInsertType)[];
 } = {
-  [TableName.Traces]: ["id", "project_id", "timestamp", "created_at"],
+  [TableName.Traces]: [
+    "id",
+    "project_id",
+    "timestamp",
+    "created_at",
+    "environment",
+  ],
   [TableName.Scores]: [
     "id",
     "project_id",
     "timestamp",
     "trace_id",
     "created_at",
+    "environment",
   ],
   [TableName.Observations]: [
     "id",
@@ -75,6 +82,7 @@ const immutableEntityKeys: {
     "trace_id",
     "start_time",
     "created_at",
+    "environment",
   ],
 };
 
@@ -82,7 +90,7 @@ export class IngestionService {
   private promptService: PromptService;
 
   constructor(
-    private redis: Redis,
+    private redis: Redis | Cluster,
     private prisma: PrismaClient,
     private clickHouseWriter: ClickhouseWriter,
     private clickhouseClient: ClickhouseClientType,
@@ -171,14 +179,20 @@ export class IngestionService {
           return {
             id: entityId,
             project_id: projectId,
+            environment: validatedScore.environment,
             timestamp: this.getMillisecondTimestamp(scoreEvent.timestamp),
             name: validatedScore.name,
             value: validatedScore.value,
             source: validatedScore.source,
             trace_id: validatedScore.traceId,
+            session_id: validatedScore.sessionId,
+            dataset_run_id: validatedScore.datasetRunId,
             data_type: validatedScore.dataType,
             observation_id: validatedScore.observationId,
             comment: validatedScore.comment,
+            metadata: scoreEvent.body.metadata
+              ? convertJsonSchemaToRecord(scoreEvent.body.metadata)
+              : {},
             string_value: validatedScore.stringValue,
             created_at: Date.now(),
             updated_at: Date.now(),
@@ -411,6 +425,7 @@ export class IngestionService {
         id: finalObservationRecord.id,
         timestamp: finalObservationRecord.start_time,
         project_id: projectId,
+        environment: finalObservationRecord.environment,
         created_at: Date.now(),
         updated_at: Date.now(),
         metadata: {},
@@ -445,6 +460,11 @@ export class IngestionService {
     const mergedRecord = this.mergeRecords(
       recordsToMerge,
       immutableEntityKeys[TableName.Scores],
+    );
+
+    // If metadata exists, it is an object due to previous parsing
+    mergedRecord.metadata = convertRecordValuesToString(
+      (mergedRecord.metadata as Record<string, unknown>) ?? {},
     );
 
     return scoreRecordInsertSchema.parse(mergedRecord);
@@ -596,16 +616,12 @@ export class IngestionService {
     | {}
   > {
     const { projectId, observationRecord } = params;
-    const internalModel = await findModel({
-      event: {
-        projectId,
-        model: observationRecord.provided_model_name ?? undefined,
-      },
-    });
-
-    logger.debug(
-      `Found internal model name ${internalModel?.modelName} (id: ${internalModel?.id}) for observation ${observationRecord.id}`,
-    );
+    const internalModel = observationRecord.provided_model_name
+      ? await findModel({
+          projectId,
+          model: observationRecord.provided_model_name,
+        })
+      : null;
 
     const final_usage_details = this.getUsageUnits(
       observationRecord,
@@ -619,7 +635,7 @@ export class IngestionService {
       final_usage_details.usage_details ?? {},
     );
 
-    logger.info(
+    logger.debug(
       `Calculated costs and usage for observation ${observationRecord.id} with model ${internalModel?.id}`,
       {
         cost: final_cost_details.cost_details,
@@ -667,7 +683,7 @@ export class IngestionService {
         model,
       });
 
-      logger.info(
+      logger.debug(
         `Tokenized observation ${observationRecord.id} with model ${model.id}, input: ${newInputCount}, output: ${newOutputCount}`,
       );
 
@@ -874,8 +890,11 @@ export class IngestionService {
     const { projectId, entityId, table, additionalFilters } = params;
 
     return await instrumentAsync(
-      { name: `get-clickhouse-${table}` },
+      { name: `get-clickhouse-${table}`, spanKind: SpanKind.CLIENT },
       async (span) => {
+        span.setAttribute("ch.query.table", table);
+        span.setAttribute("db.system", "clickhouse");
+        span.setAttribute("db.operation.name", "SELECT");
         span.setAttribute("projectId", projectId);
         const queryResult = await this.clickhouseClient.query({
           query: `
@@ -889,7 +908,32 @@ export class IngestionService {
           `,
           format: "JSONEachRow",
           query_params: { projectId, entityId, ...additionalFilters.params },
+          clickhouse_settings: {
+            log_comment: JSON.stringify({
+              feature: "ingestion",
+              projectId,
+            }),
+          },
         });
+
+        span.setAttribute("ch.queryId", queryResult.query_id);
+        const summaryHeader =
+          queryResult.response_headers["x-clickhouse-summary"];
+        if (summaryHeader) {
+          try {
+            const summary = Array.isArray(summaryHeader)
+              ? JSON.parse(summaryHeader[0])
+              : JSON.parse(summaryHeader);
+            for (const key in summary) {
+              span.setAttribute(`ch.${key}`, summary[key]);
+            }
+          } catch (error) {
+            logger.debug(
+              `Failed to parse clickhouse summary header ${summaryHeader}`,
+              error,
+            );
+          }
+        }
 
         const result = await queryResult.json();
 
@@ -923,12 +967,6 @@ export class IngestionService {
     const { traceEventList, projectId, entityId } = params;
 
     return traceEventList.map((trace) => {
-      if (!trace.body?.timestamp) {
-        logger.warn(
-          `Trace ${entityId} in project ${projectId} does not have a timestamp, using event time`,
-        );
-      }
-
       const traceRecord: TraceRecordInsertType = {
         id: entityId,
         timestamp: this.getMillisecondTimestamp(
@@ -945,6 +983,7 @@ export class IngestionService {
         release: trace.body.release,
         version: trace.body.version,
         project_id: projectId,
+        environment: trace.body.environment,
         public: trace.body.public ?? false,
         bookmarked: false,
         tags: trace.body.tags ?? [],
@@ -1047,17 +1086,13 @@ export class IngestionService {
           : {}),
       };
 
-      if (obs.type?.endsWith("-create") && !obs.body?.startTime) {
-        logger.warn(
-          `Observation ${entityId} in project ${projectId} does not have a startTime, using event time`,
-        );
-      }
-
       const observationRecord: ObservationRecordInsertType = {
         id: entityId,
         trace_id: obs.body.traceId ?? v4(),
         type: observationType,
         name: obs.body.name,
+        environment:
+          "environment" in obs.body ? obs.body.environment : "default",
         start_time: this.getMillisecondTimestamp(
           obs.body.startTime ?? obs.timestamp,
         ),

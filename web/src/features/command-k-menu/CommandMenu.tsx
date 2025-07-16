@@ -15,6 +15,10 @@ import { env } from "@/src/env.mjs";
 import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePostHogClientCapture";
 import { useDebounce } from "@/src/hooks/useDebounce";
 import { useCommandMenu } from "@/src/features/command-k-menu/CommandMenuProvider";
+import { useProjectSettingsPages } from "@/src/pages/project/[projectId]/settings";
+import { useOrganizationSettingsPages } from "@/src/pages/organization/[organizationId]/settings";
+import { useQueryProjectOrOrganization } from "@/src/features/projects/hooks";
+import { api } from "@/src/utils/api";
 
 export function CommandMenu({
   mainNavigation,
@@ -24,6 +28,26 @@ export function CommandMenu({
   const { open, setOpen } = useCommandMenu();
   const router = useRouter();
   const { allProjectItems } = useNavigationItems();
+  const settingsPages = useProjectSettingsPages();
+  const orgSettingsPages = useOrganizationSettingsPages();
+  const { organization, project } = useQueryProjectOrOrganization();
+
+  const projectSettingsItems = settingsPages
+    .filter((page) => page.show !== false && !("href" in page))
+    .map((page) => ({
+      title: `Project Settings > ${page.title}`,
+      url: `/project/${project?.id}/settings${page.slug === "index" ? "" : `/${page.slug}`}`,
+      keywords: page.cmdKKeywords || [],
+    }));
+
+  const orgSettingsItems = orgSettingsPages
+    .filter((page) => page.show !== false && !("href" in page))
+    .map((page) => ({
+      title: `Organization Settings > ${page.title}`,
+      url: `/organization/${organization?.id}/settings${page.slug === "index" ? "" : `/${page.slug}`}`,
+      keywords: page.cmdKKeywords || [],
+    }));
+
   const capture = usePostHogClientCapture();
 
   const debouncedSearchChange = useDebounce(
@@ -58,6 +82,33 @@ export function CommandMenu({
         !item.url.includes("["), // no dynamic routes without inserted values
     );
 
+  const dashboardsQuery = api.dashboard.allDashboards.useQuery(
+    {
+      projectId: project?.id ?? "",
+      orderBy: {
+        column: "updatedAt",
+        order: "DESC",
+      },
+      limit: 100,
+      page: 0,
+    },
+    {
+      enabled: open && Boolean(project?.id),
+    },
+  );
+
+  const dashboardItems =
+    dashboardsQuery.data?.dashboards.map((d) => ({
+      title: `Dashboard > ${d.name}`,
+      url: `/project/${project?.id}/dashboards/${d.id}`,
+      keywords: [
+        "dashboard",
+        d.name.toLowerCase(),
+        (d.description ?? "").toLowerCase(),
+      ],
+      active: router.query.dashboardId === d.id,
+    })) ?? [];
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -80,8 +131,12 @@ export function CommandMenu({
       onOpenChange={setOpen}
       filter={(value, search, keywords) => {
         const extendValue = value + " " + keywords?.join(" ");
-        if (extendValue.toLowerCase().includes(search.toLowerCase())) return 1;
-        return 0;
+        const searchTerms = search.toLowerCase().split(" ");
+        return searchTerms.every((term) =>
+          extendValue.toLowerCase().includes(term),
+        )
+          ? 1
+          : 0;
       }}
     >
       <CommandInput
@@ -125,6 +180,82 @@ export function CommandMenu({
                     router.push(item.url);
                     capture("cmd_k_menu:navigated", {
                       type: "project",
+                      title: item.title,
+                      url: item.url,
+                    });
+                    setOpen(false);
+                  }}
+                >
+                  {item.title}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+        {dashboardItems.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Dashboards">
+              {dashboardItems.map((item) => (
+                <CommandItem
+                  key={item.url}
+                  value={item.title}
+                  keywords={item.keywords}
+                  disabled={item.active}
+                  onSelect={() => {
+                    router.push(item.url);
+                    capture("cmd_k_menu:navigated", {
+                      type: "dashboard",
+                      title: item.title,
+                      url: item.url,
+                    });
+                    setOpen(false);
+                  }}
+                >
+                  {item.title}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+        {projectSettingsItems.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Project Settings">
+              {projectSettingsItems.map((item) => (
+                <CommandItem
+                  key={item.url}
+                  value={item.title}
+                  keywords={item.keywords}
+                  onSelect={() => {
+                    router.push(item.url);
+                    capture("cmd_k_menu:navigated", {
+                      type: "project_settings",
+                      title: item.title,
+                      url: item.url,
+                    });
+                    setOpen(false);
+                  }}
+                >
+                  {item.title}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+        {orgSettingsItems.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Organization Settings">
+              {orgSettingsItems.map((item) => (
+                <CommandItem
+                  key={item.url}
+                  value={item.title}
+                  keywords={item.keywords}
+                  onSelect={() => {
+                    router.push(item.url);
+                    capture("cmd_k_menu:navigated", {
+                      type: "organization_settings",
                       title: item.title,
                       url: item.url,
                     });

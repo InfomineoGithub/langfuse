@@ -4,12 +4,12 @@ import {
   protectedOrganizationProcedure,
 } from "@/src/server/api/trpc";
 import { TRPCError } from "@trpc/server";
-import * as z from "zod";
+import * as z from "zod/v4";
 import {
   hasOrganizationAccess,
   throwIfNoOrganizationAccess,
 } from "@/src/features/rbac/utils/checkOrganizationAccess";
-import { type PrismaClient, Role } from "@langfuse/shared";
+import { Prisma, type PrismaClient, Role } from "@langfuse/shared";
 import { sendMembershipInvitationEmail } from "@langfuse/shared/src/server";
 import { env } from "@/src/env.mjs";
 import { hasEntitlement } from "@/src/features/entitlements/server/hasEntitlement";
@@ -86,10 +86,10 @@ export const membersRouter = createTRPCRouter({
       z.object({
         orgId: z.string(),
         email: z.string().email(),
-        orgRole: z.nativeEnum(Role),
+        orgRole: z.enum(Role),
         // in case a projectRole should be set for a specific project
         projectId: z.string().optional(),
-        projectRole: z.nativeEnum(Role).optional(),
+        projectRole: z.enum(Role).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -279,38 +279,54 @@ export const membersRouter = createTRPCRouter({
           env: env,
         });
       } else {
-        const invitation = await ctx.prisma.membershipInvitation.create({
-          data: {
-            orgId: input.orgId,
-            projectId:
-              project && input.projectRole && input.projectRole !== Role.NONE
-                ? project.id
-                : null,
-            email: input.email.toLowerCase(),
-            orgRole: input.orgRole,
-            projectRole:
-              input.projectRole && input.projectRole !== Role.NONE && project
-                ? input.projectRole
-                : null,
-            invitedByUserId: ctx.session.user.id,
-          },
-        });
-        await auditLog({
-          session: ctx.session,
-          resourceType: "membershipInvitation",
-          resourceId: invitation.id,
-          action: "create",
-          after: invitation,
-        });
-        await sendMembershipInvitationEmail({
-          inviterEmail: ctx.session.user.email!,
-          inviterName: ctx.session.user.name!,
-          to: input.email,
-          orgName: org.name,
-          env: env,
-        });
+        try {
+          const invitation = await ctx.prisma.membershipInvitation.create({
+            data: {
+              orgId: input.orgId,
+              projectId:
+                project && input.projectRole && input.projectRole !== Role.NONE
+                  ? project.id
+                  : null,
+              email: input.email.toLowerCase(),
+              orgRole: input.orgRole,
+              projectRole:
+                input.projectRole && input.projectRole !== Role.NONE && project
+                  ? input.projectRole
+                  : null,
+              invitedByUserId: ctx.session.user.id,
+            },
+          });
 
-        return invitation;
+          await auditLog({
+            session: ctx.session,
+            resourceType: "membershipInvitation",
+            resourceId: invitation.id,
+            action: "create",
+            after: invitation,
+          });
+          await sendMembershipInvitationEmail({
+            inviterEmail: ctx.session.user.email!,
+            inviterName: ctx.session.user.name!,
+            to: input.email,
+            orgName: org.name,
+            env: env,
+          });
+
+          return invitation;
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "A pending membership invitation with this email and organization already exists",
+            });
+          } else {
+            throw error;
+          }
+        }
       }
     }),
   deleteMembership: protectedOrganizationProcedure
@@ -449,7 +465,7 @@ export const membersRouter = createTRPCRouter({
       z.object({
         orgId: z.string(),
         orgMembershipId: z.string(),
-        role: z.nativeEnum(Role),
+        role: z.enum(Role),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -523,7 +539,7 @@ export const membersRouter = createTRPCRouter({
         orgMembershipId: z.string(),
         userId: z.string(),
         projectId: z.string(),
-        projectRole: z.nativeEnum(Role).nullable(),
+        projectRole: z.enum(Role).nullable(),
       }),
     )
     .mutation(async ({ input, ctx }) => {

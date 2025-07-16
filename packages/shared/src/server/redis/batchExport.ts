@@ -1,6 +1,6 @@
 import { Queue } from "bullmq";
 import { QueueName, TQueueJobTypes } from "../queues";
-import { createNewRedisInstance, redisQueueRetryOptions } from "./redis";
+import { createNewRedisInstance, redisQueueRetryOptions, getQueuePrefix } from "./redis";
 import { logger } from "../logger";
 
 export class BatchExportQueue {
@@ -22,10 +22,11 @@ export class BatchExportQueue {
           QueueName.BatchExport,
           {
             connection: newRedis,
+            prefix: getQueuePrefix(QueueName.BatchExport),
             defaultJobOptions: {
               removeOnComplete: true,
               removeOnFail: 10_000,
-              attempts: 2,
+              attempts: 8,
               backoff: {
                 type: "exponential",
                 delay: 5000,

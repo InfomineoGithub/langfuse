@@ -1,11 +1,12 @@
 import {
   clickhouseClient,
   ClickhouseClientType,
-  EventLogRecordInsertType,
+  BlobStorageFileLogInsertType,
   getCurrentSpan,
   ObservationRecordInsertType,
   recordGauge,
   recordHistogram,
+  recordIncrement,
   ScoreRecordInsertType,
   TraceRecordInsertType,
 } from "@langfuse/shared/src/server";
@@ -37,7 +38,7 @@ export class ClickhouseWriter {
       [TableName.Traces]: [],
       [TableName.Scores]: [],
       [TableName.Observations]: [],
-      [TableName.EventLog]: [],
+      [TableName.BlobStorageFileLog]: [],
     };
 
     this.start();
@@ -97,11 +98,12 @@ export class ClickhouseWriter {
         spanKind: SpanKind.CONSUMER,
       },
       async () => {
+        recordIncrement("langfuse.queue.clickhouse_writer.request");
         await Promise.all([
           this.flush(TableName.Traces, fullQueue),
           this.flush(TableName.Scores, fullQueue),
           this.flush(TableName.Observations, fullQueue),
-          this.flush(TableName.EventLog, fullQueue),
+          this.flush(TableName.BlobStorageFileLog, fullQueue),
         ]).catch((err) => {
           logger.error("ClickhouseWriter.flushAll", err);
         });
@@ -174,8 +176,10 @@ export class ClickhouseWriter {
           });
         } else {
           // TODO - Add to a dead letter queue in Redis rather than dropping
+          recordIncrement("langfuse.queue.clickhouse_writer.error");
           logger.error(
-            `Max attempts reached for ${tableName} record. Dropping record ${item.data}.`,
+            `Max attempts reached for ${tableName} record. Dropping record.`,
+            { item: item.data },
           );
         }
       });
@@ -208,14 +212,14 @@ export class ClickhouseWriter {
   }): Promise<void> {
     const startTime = Date.now();
 
-    await (
-      ClickhouseWriter.client ??
-      clickhouseClient({ tags: { feature: "ingestion" } })
-    )
+    await (ClickhouseWriter.client ?? clickhouseClient())
       .insert({
         table: params.table,
         format: "JSONEachRow",
         values: params.records,
+        clickhouse_settings: {
+          log_comment: JSON.stringify({ feature: "ingestion" }),
+        },
       })
       .catch((err) => {
         logger.error(`ClickhouseWriter.writeToClickhouse ${err}`);
@@ -235,7 +239,7 @@ export enum TableName {
   Traces = "traces",
   Scores = "scores",
   Observations = "observations",
-  EventLog = "event_log",
+  BlobStorageFileLog = "blob_storage_file_log",
 }
 
 type RecordInsertType<T extends TableName> = T extends TableName.Scores
@@ -244,8 +248,8 @@ type RecordInsertType<T extends TableName> = T extends TableName.Scores
     ? ObservationRecordInsertType
     : T extends TableName.Traces
       ? TraceRecordInsertType
-      : T extends TableName.EventLog
-        ? EventLogRecordInsertType
+      : T extends TableName.BlobStorageFileLog
+        ? BlobStorageFileLogInsertType
         : never;
 
 type ClickhouseQueue = {

@@ -5,20 +5,28 @@ import { CloudUsageMeteringQueue } from "./cloudUsageMeteringQueue";
 import { DatasetRunItemUpsertQueue } from "./datasetRunItemUpsert";
 import { EvalExecutionQueue } from "./evalExecutionQueue";
 import { ExperimentCreateQueue } from "./experimentCreateQueue";
-import { IngestionQueue, SecondaryIngestionQueue } from "./ingestionQueue";
+import { SecondaryIngestionQueue } from "./ingestionQueue";
 import { TraceUpsertQueue } from "./traceUpsert";
 import { TraceDeleteQueue } from "./traceDelete";
 import { ProjectDeleteQueue } from "./projectDelete";
 import { PostHogIntegrationQueue } from "./postHogIntegrationQueue";
 import { PostHogIntegrationProcessingQueue } from "./postHogIntegrationProcessingQueue";
+import { BlobStorageIntegrationQueue } from "./blobStorageIntegrationQueue";
+import { BlobStorageIntegrationProcessingQueue } from "./blobStorageIntegrationProcessingQueue";
 import { CoreDataS3ExportQueue } from "./coreDataS3ExportQueue";
 import { MeteringDataPostgresExportQueue } from "./meteringDataPostgresExportQueue";
 import { DataRetentionQueue } from "./dataRetentionQueue";
 import { DataRetentionProcessingQueue } from "./dataRetentionProcessingQueue";
 import { BatchActionQueue } from "./batchActionQueue";
 import { CreateEvalQueue } from "./createEvalQueue";
+import { ScoreDeleteQueue } from "./scoreDelete";
+import { DeadLetterRetryQueue } from "./dlqRetryQueue";
 
-export function getQueue(queueName: QueueName): Queue | null {
+// IngestionQueue is sharded and requires a sharding key
+// Use IngestionQueue.getInstance({ shardName: queueName }) directly instead
+export function getQueue(
+  queueName: Exclude<QueueName, QueueName.IngestionQueue>,
+): Queue | null {
   switch (queueName) {
     case QueueName.BatchExport:
       return BatchExportQueue.getInstance();
@@ -34,14 +42,16 @@ export function getQueue(queueName: QueueName): Queue | null {
       return TraceUpsertQueue.getInstance();
     case QueueName.TraceDelete:
       return TraceDeleteQueue.getInstance();
-    case QueueName.IngestionQueue:
-      return IngestionQueue.getInstance();
     case QueueName.ProjectDelete:
       return ProjectDeleteQueue.getInstance();
     case QueueName.PostHogIntegrationQueue:
       return PostHogIntegrationQueue.getInstance();
     case QueueName.PostHogIntegrationProcessingQueue:
       return PostHogIntegrationProcessingQueue.getInstance();
+    case QueueName.BlobStorageIntegrationQueue:
+      return BlobStorageIntegrationQueue.getInstance();
+    case QueueName.BlobStorageIntegrationProcessingQueue:
+      return BlobStorageIntegrationProcessingQueue.getInstance();
     case QueueName.IngestionSecondaryQueue:
       return SecondaryIngestionQueue.getInstance();
     case QueueName.CoreDataS3ExportQueue:
@@ -56,6 +66,10 @@ export function getQueue(queueName: QueueName): Queue | null {
       return BatchActionQueue.getInstance();
     case QueueName.CreateEvalQueue:
       return CreateEvalQueue.getInstance();
+    case QueueName.ScoreDelete:
+      return ScoreDeleteQueue.getInstance();
+    case QueueName.DeadLetterRetryQueue:
+      return DeadLetterRetryQueue.getInstance();
     default:
       const exhaustiveCheckDefault: never = queueName;
       throw new Error(`Queue ${queueName} not found`);
