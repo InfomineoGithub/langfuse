@@ -12,7 +12,7 @@ spec:
           serviceAccountName: analytics-sa
           containers:
           - name: analytics
-            image: europe-west1-docker.pkg.dev/brain-staging-450115/clickhouse-analytics/clickhouse-analytics:latest
+            image: europe-west1-docker.pkg.dev/brain-prod-450115/clickhouse-analytics/clickhouse-analytics:latest
             # Launch a shell, then run the pipeline
             command: ["/bin/sh", "-c"]
             args:
