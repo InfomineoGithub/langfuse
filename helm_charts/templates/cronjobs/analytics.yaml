@@ -22,7 +22,7 @@ spec:
                   --user "$CLICKHOUSE_USERNAME" \
                   --password "$CLICKHOUSE_PASSWORD" \
                   --query "SELECT id, name, timestamp, user_id, tags, session_id FROM default.traces WHERE timestamp >= now() - INTERVAL 1 DAY ORDER BY timestamp DESC FORMAT CSVWithNames" \
-                | gsutil cp - gs://brain-langfuse-monitor/batch_2/$(date +%Y-%m-%d)-table-extract_3.csv
+                | gsutil cp - gs://brain-langfuse-monitor/batch/$(date +%Y-%m-%d)-table-extract.csv
             env:
               - name: CLICKHOUSE_PASSWORD
                 valueFrom:
