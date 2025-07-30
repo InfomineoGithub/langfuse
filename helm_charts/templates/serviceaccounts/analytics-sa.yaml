@@ -6,11 +6,6 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     app: analytics
-  {{- with .Values.serviceAccount.annotations }}
   annotations:
     iam.gke.io/gcp-service-account: {{ .Values.serviceAccount.gcpServiceAccount }}
-    {{- with .Values.serviceAccount.annotations }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-  {{- end }}
 {{- end }}
