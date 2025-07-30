@@ -8,7 +8,6 @@ spec:
   containers:
   - name: analytics
     image: europe-west1-docker.pkg.dev/brain-staging-450115/clickhouse-analytics/clickhouse-analytics:latest
-    # This command keeps the container running indefinitely for testing
     command: ["sleep", "3600"]
     env:
       - name: CLICKHOUSE_PASSWORD
