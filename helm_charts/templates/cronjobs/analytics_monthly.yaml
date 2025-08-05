@@ -1,11 +1,9 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: analytics-monthly-archive
+  name: analytics-monthly
   namespace: chatbot
 spec:
-  # Schedule: Run at 00:00 on the 1st day of every month.
-  # You could also use the shorthand "@monthly"
   schedule: "0 0 1 * *"
   jobTemplate:
     spec:
@@ -24,21 +22,21 @@ spec:
                   --user "$CLICKHOUSE_USERNAME" \
                   --password "$CLICKHOUSE_PASSWORD" \
                   --query "SELECT id, name, timestamp, user_id, tags, session_id FROM default.traces WHERE timestamp >= now() - INTERVAL 2 MONTH ORDER BY timestamp DESC FORMAT CSVWithNames" \
-                | gsutil cp - gs://brain-langfuse-monitor-prod/batch/monthly/$(date +%Y-%m)-monthly-archive.csv
-          env:
-            - name: CLICKHOUSE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: my-clickhouse-secret
-                  key: password
-            - name: CLICKHOUSE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: my-clickhouse-secret
-                  key: username
-            - name: CLICKHOUSE_SERVICE_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: my-clickhouse-secret
-                  key: service_name
+                | gsutil cp - gs://brain-langfuse-monitor-prod/batch/$(date +%Y-%m-%d)-table-monthly-extract.csv
+            env:
+              - name: CLICKHOUSE_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: my-clickhouse-secret
+                    key: password
+              - name: CLICKHOUSE_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: my-clickhouse-secret
+                    key: username
+              - name: CLICKHOUSE_SERVICE_NAME
+                valueFrom:
+                  secretKeyRef:
+                    name: my-clickhouse-secret
+                    key: service_name
           restartPolicy: OnFailure
