@@ -23,7 +23,7 @@ spec:
                   --host "$CLICKHOUSE_SERVICE_NAME" \
                   --user "$CLICKHOUSE_USERNAME" \
                   --password "$CLICKHOUSE_PASSWORD" \
-                  --query "SELECT id, name, timestamp, user_id, tags, session_id FROM default.traces WHERE timestamp >= now() - INTERVAL 1 MONTH ORDER BY timestamp DESC FORMAT CSVWithNames" \
+                  --query "SELECT id, name, timestamp, user_id, tags, session_id FROM default.traces WHERE timestamp >= now() - INTERVAL 2 MONTH ORDER BY timestamp DESC FORMAT CSVWithNames" \
                 | gsutil cp - gs://brain-langfuse-monitor-prod/batch/monthly/$(date +%Y-%m)-monthly-archive.csv
           env:
             - name: CLICKHOUSE_PASSWORD
