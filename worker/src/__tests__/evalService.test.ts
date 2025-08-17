@@ -30,7 +30,7 @@ import {
   test,
   vi,
 } from "vitest";
-import { compileHandlebarString } from "../features/utilities";
+import { compileHandlebarString } from "../features/utils/utilities";
 import { OpenAIServer } from "./network";
 import { pruneDatabase } from "./utils";
 import {
@@ -38,10 +38,7 @@ import {
   evaluate,
   extractVariablesFromTracingData,
 } from "../features/evaluation/evalService";
-import {
-  requiresDatabaseLookup,
-  requiresObservationData,
-} from "../features/evaluation/traceFilterUtils";
+import { requiresDatabaseLookup } from "../features/evaluation/traceFilterUtils";
 let OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const hasActiveKey = Boolean(OPENAI_API_KEY);
 if (!hasActiveKey) {
@@ -732,6 +729,7 @@ describe("eval service tests", () => {
       await upsertTrace({
         id: traceId,
         project_id: "7a88fb47-b4e2-43b8-a06c-a5ce950dc53a",
+        user_id: "b",
         timestamp: convertDateToClickhouseDateTime(new Date()),
         created_at: convertDateToClickhouseDateTime(new Date()),
         updated_at: convertDateToClickhouseDateTime(new Date()),

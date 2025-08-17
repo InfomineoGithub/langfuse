@@ -258,7 +258,10 @@ export function DashboardTable() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem asChild>
-                  <CloneDashboardButton dashboardId={id} projectId={projectId} />
+                  <CloneDashboardButton
+                    dashboardId={id}
+                    projectId={projectId}
+                  />
                 </DropdownMenuItem>
                 {owner === "PROJECT" && (
                   <DropdownMenuItem asChild>
@@ -279,6 +282,7 @@ export function DashboardTable() {
 
   return (
     <DataTable
+      tableName={"dashboards"}
       columns={dashboardColumns}
       data={
         dashboards.isLoading

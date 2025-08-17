@@ -1,5 +1,9 @@
-import { JSONView } from "@/src/components/ui/CodeJsonViewer";
-import { AnnotationQueueObjectType, type APIScoreV2 } from "@langfuse/shared";
+import { PrettyJsonView } from "@/src/components/ui/PrettyJsonView";
+import {
+  AnnotationQueueObjectType,
+  type APIScoreV2,
+  isGenerationLike,
+} from "@langfuse/shared";
 import { Badge } from "@/src/components/ui/badge";
 import { type ObservationReturnType } from "@/src/server/api/routers/traces";
 import { api } from "@/src/utils/api";
@@ -34,6 +38,7 @@ import { usePostHogClientCapture } from "@/src/features/posthog-analytics/usePos
 import { Tabs, TabsList, TabsTrigger } from "@/src/components/ui/tabs";
 import { useRouter } from "next/router";
 import { CopyIdsPopover } from "@/src/components/trace/CopyIdsPopover";
+import { useJsonExpansion } from "@/src/components/trace/JsonExpansionContext";
 
 export const ObservationPreview = ({
   observations,
@@ -58,7 +63,10 @@ export const ObservationPreview = ({
     "view",
     withDefault(StringParam, "preview"),
   );
-  const [currentView, setCurrentView] = useState<"pretty" | "json">("pretty");
+  const [currentView, setCurrentView] = useLocalStorage<"pretty" | "json">(
+    "jsonViewPreference",
+    "pretty",
+  );
   const capture = usePostHogClientCapture();
   const [isPrettyViewAvailable, setIsPrettyViewAvailable] = useState(false);
   const [emptySelectedConfigIds, setEmptySelectedConfigIds] = useLocalStorage<
@@ -70,6 +78,7 @@ export const ObservationPreview = ({
   const router = useRouter();
   const { peek } = router.query;
   const showScoresTab = isAuthenticatedAndProjectMember && peek === undefined;
+  const { expansionState, setFieldExpansion } = useJsonExpansion();
 
   const currentObservation = observations.find(
     (o) => o.id === currentObservationId,
@@ -172,14 +181,15 @@ export const ObservationPreview = ({
                     objectType={AnnotationQueueObjectType.OBSERVATION}
                   />
                 </div>
-                {observationWithInputAndOutput.data?.type === "GENERATION" && (
-                  <JumpToPlaygroundButton
-                    source="generation"
-                    generation={observationWithInputAndOutput.data}
-                    analyticsEventName="trace_detail:test_in_playground_button_click"
-                    className={cn(isTimeline ? "!hidden" : "")}
-                  />
-                )}
+                {observationWithInputAndOutput.data &&
+                  isGenerationLike(observationWithInputAndOutput.data.type) && (
+                    <JumpToPlaygroundButton
+                      source="generation"
+                      generation={observationWithInputAndOutput.data}
+                      analyticsEventName="trace_detail:test_in_playground_button_click"
+                      className={cn(isTimeline ? "!hidden" : "")}
+                    />
+                  )}
                 <CommentDrawerButton
                   projectId={preloadedObservation.projectId}
                   objectId={preloadedObservation.id}
@@ -254,7 +264,7 @@ export const ObservationPreview = ({
                       projectId={preloadedObservation.projectId}
                     />
                   ) : undefined}
-                  {preloadedObservation.type === "GENERATION" && (
+                  {isGenerationLike(preloadedObservation.type) && (
                     <BreakdownTooltip
                       details={preloadedObservation.usageDetails}
                       isCost={false}
@@ -404,26 +414,40 @@ export const ObservationPreview = ({
                   media={observationMedia.data}
                   currentView={currentView}
                   setIsPrettyViewAvailable={setIsPrettyViewAvailable}
+                  inputExpansionState={expansionState.input}
+                  outputExpansionState={expansionState.output}
+                  onInputExpansionChange={(expansion) =>
+                    setFieldExpansion("input", expansion)
+                  }
+                  onOutputExpansionChange={(expansion) =>
+                    setFieldExpansion("output", expansion)
+                  }
                 />
               </div>
               <div>
                 {preloadedObservation.statusMessage && (
-                  <JSONView
+                  <PrettyJsonView
                     key={preloadedObservation.id + "-status"}
                     title="Status Message"
                     json={preloadedObservation.statusMessage}
+                    currentView={currentView}
                   />
                 )}
               </div>
               <div>
                 {observationWithInputAndOutput.data?.metadata && (
-                  <JSONView
+                  <PrettyJsonView
                     key={observationWithInputAndOutput.data.id + "-metadata"}
                     title="Metadata"
                     json={observationWithInputAndOutput.data.metadata}
                     media={observationMedia.data?.filter(
                       (m) => m.field === "metadata",
                     )}
+                    currentView={currentView}
+                    externalExpansionState={expansionState.metadata}
+                    onExternalExpansionChange={(expansion) =>
+                      setFieldExpansion("metadata", expansion)
+                    }
                   />
                 )}
               </div>

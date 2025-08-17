@@ -27,6 +27,10 @@ import {
   getObservationForTraceIdByName,
   InMemoryFilterService,
   recordIncrement,
+  getCurrentSpan,
+  DatasetRunItemsOperationType,
+  executeWithDatasetRunItemsStrategy,
+  getDatasetItemIdsByTraceIdCh,
 } from "@langfuse/shared/src/server";
 import {
   mapTraceFilterColumn,
@@ -34,7 +38,6 @@ import {
 } from "./traceFilterUtils";
 import {
   ChatMessageRole,
-  ForbiddenError,
   LangfuseNotFoundError,
   Prisma,
   singleFilter,
@@ -49,13 +52,11 @@ import {
   TraceDomain,
   Observation,
   DatasetItem,
+  QUEUE_ERROR_MESSAGES,
 } from "@langfuse/shared";
 import { kyselyPrisma, prisma } from "@langfuse/shared/src/db";
 import { backOff } from "exponential-backoff";
-import {
-  callStructuredLLM,
-  compileHandlebarString,
-} from "../../features/utilities";
+import { callStructuredLLM, compileHandlebarString } from "../utils";
 import { env } from "../../env";
 import { JSONPath } from "jsonpath-plus";
 
@@ -162,6 +163,11 @@ export const createEvalJobs = async ({
   jobTimestamp: Date;
   enforcedJobTimeScope?: JobTimeScope;
 }) => {
+  const span = getCurrentSpan();
+  if (span) {
+    span.setAttribute("messaging.bullmq.job.input.projectId", event.projectId);
+  }
+
   // Fetch all configs for a given project. Those may be dataset or trace configs.
   let configsQuery = kyselyPrisma.$kysely
     .selectFrom("job_configurations")
@@ -319,19 +325,33 @@ export const createEvalJobs = async ({
         `);
         datasetItem = datasetItems.shift();
       } else {
-        // Otherwise, try to find the dataset item id from datasetRunItems.
-        // Here, we can search for the traceId and projectId and should only get one result.
-        const datasetItems = await prisma.$queryRaw<
-          Array<{ id: string }>
-        >(Prisma.sql`
-          SELECT dataset_item_id as id
-          FROM dataset_run_items as dri
-          JOIN dataset_items as di ON di.id = dri.dataset_item_id AND di.project_id = ${event.projectId}
-          WHERE dri.project_id = ${event.projectId}
-            AND dri.trace_id = ${event.traceId}
-            ${condition}
-        `);
-        datasetItem = datasetItems.shift();
+        datasetItem = await executeWithDatasetRunItemsStrategy({
+          input: {},
+          operationType: DatasetRunItemsOperationType.READ,
+          postgresExecution: async () => {
+            // Otherwise, try to find the dataset item id from datasetRunItems.
+            // Here, we can search for the traceId and projectId and should only get one result.
+            const datasetItems = await prisma.$queryRaw<
+              Array<{ id: string }>
+            >(Prisma.sql`
+              SELECT dataset_item_id as id
+              FROM dataset_run_items as dri
+              JOIN dataset_items as di ON di.id = dri.dataset_item_id AND di.project_id = ${event.projectId}
+              WHERE dri.project_id = ${event.projectId}
+                AND dri.trace_id = ${event.traceId}
+                ${condition}
+            `);
+            return datasetItems.shift();
+          },
+          clickhouseExecution: async () => {
+            const datasetItemIds = await getDatasetItemIdsByTraceIdCh({
+              projectId: event.projectId,
+              traceId: event.traceId,
+              filter: config.target_object === "dataset" ? validatedFilter : [],
+            });
+            return datasetItemIds.shift();
+          },
+        });
       }
     }
 
@@ -440,6 +460,10 @@ export const createEvalJobs = async ({
             jobExecutionId: jobExecutionId,
             delay: config.delay,
           },
+          retryBaggage: {
+            originalJobTimestamp: new Date(),
+            attempt: 0,
+          },
         },
         {
           delay: config.delay, // milliseconds
@@ -470,6 +494,11 @@ export const evaluate = async ({
 }: {
   event: z.infer<typeof EvalExecutionEvent>;
 }) => {
+  const span = getCurrentSpan();
+  if (span) {
+    span.setAttribute("messaging.bullmq.job.input.projectId", event.projectId);
+  }
+
   logger.debug(
     `Evaluating job ${event.jobExecutionId} for project ${event.projectId}`,
   );
@@ -488,13 +517,7 @@ export const evaluate = async ({
     return;
   }
 
-  if (!job?.job_input_trace_id) {
-    throw new ForbiddenError(
-      "Jobs can only be executed on traces and dataset runs for now.",
-    );
-  }
-
-  if (job.status === "CANCELLED") {
+  if (job.status === "CANCELLED" || !job?.job_input_trace_id) {
     logger.debug(`Job ${job.id} for project ${event.projectId} was cancelled.`);
 
     await kyselyPrisma.$kysely
@@ -877,11 +900,11 @@ export async function extractVariablesFromTracingData({
       // user facing errors
       if (!observation) {
         logger.warn(
-          `Observation ${mapping.objectName} for trace ${traceId} not found. Please ensure the mapped data exists and consider extending the job delay.`,
+          `Observation ${mapping.objectName} for trace ${traceId} not found. ${QUEUE_ERROR_MESSAGES.MAPPED_DATA_ERROR}`,
         );
         // this should only happen for deleted data or data replication lags across clickhouse nodes.
         throw new LangfuseNotFoundError(
-          `Observation ${mapping.objectName} for trace ${traceId} not found. Please ensure the mapped data exists and consider extending the job delay.`,
+          `Observation ${mapping.objectName} for trace ${traceId} not found. ${QUEUE_ERROR_MESSAGES.MAPPED_DATA_ERROR}`,
         );
       }
 

@@ -9,6 +9,7 @@ import {
   logger,
   QueueName,
   recordDistribution,
+  recordHistogram,
   recordIncrement,
   redis,
   TQueueJobTypes,
@@ -137,11 +138,15 @@ export const ingestionQueueProcessorBuilder = (
       const events: IngestionEventType[] = [];
 
       // Check if we should skip S3 list operation
-      // The producer sets skipS3List to true if it's an OTel observation
       const shouldSkipS3List =
-        job.data.payload.data.skipS3List && job.data.payload.data.fileKey;
-
+        // The producer sets skipS3List to true if it's an OTel observation
+        (job.data.payload.data.skipS3List && job.data.payload.data.fileKey) ||
+        // If we do not insert into the traces table, we can skip the list and process single files
+        (env.LANGFUSE_EXPERIMENT_INSERT_INTO_TRACES_TABLE === "false" &&
+          clickhouseEntityType === "trace");
       const s3Prefix = `${env.LANGFUSE_S3_EVENT_UPLOAD_PREFIX}${job.data.payload.authCheck.scope.projectId}/${clickhouseEntityType}/${job.data.payload.data.eventBodyId}/`;
+
+      let totalS3DownloadSizeBytes = 0;
 
       if (shouldSkipS3List) {
         // Direct file download - skip S3 list operation
@@ -149,6 +154,13 @@ export const ingestionQueueProcessorBuilder = (
         eventFiles = [{ file: filePath, createdAt: new Date() }];
 
         const file = await s3Client.download(filePath);
+        const fileSize = file.length;
+
+        recordHistogram("langfuse.ingestion.s3_file_size_bytes", fileSize, {
+          skippedS3List: "true",
+        });
+        totalS3DownloadSizeBytes += fileSize;
+
         const parsedFile = JSON.parse(file);
         events.push(...(Array.isArray(parsedFile) ? parsedFile : [parsedFile]));
       } else {
@@ -158,6 +170,13 @@ export const ingestionQueueProcessorBuilder = (
         // If a user has 5k events, this will likely take 100 seconds.
         const downloadAndParseFile = async (fileRef: { file: string }) => {
           const file = await s3Client.download(fileRef.file);
+          const fileSize = file.length;
+
+          recordHistogram("langfuse.ingestion.s3_file_size_bytes", fileSize, {
+            skippedS3List: "false",
+          });
+          totalS3DownloadSizeBytes += fileSize;
+
           const parsedFile = JSON.parse(file);
           return Array.isArray(parsedFile) ? parsedFile : [parsedFile];
         };
@@ -184,6 +203,10 @@ export const ingestionQueueProcessorBuilder = (
         eventFiles.length,
       );
       span?.setAttribute("langfuse.ingestion.event.kind", clickhouseEntityType);
+      span?.setAttribute(
+        "langfuse.ingestion.s3_all_files_size_bytes",
+        totalS3DownloadSizeBytes,
+      );
 
       const firstS3WriteTime =
         eventFiles

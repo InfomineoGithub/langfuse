@@ -170,7 +170,7 @@ export function MembersTable({
       headerTooltip: {
         description:
           "The org-role is the default role for this user in this organization and applies to the organization and all its projects.",
-        href: "https://langfuse.com/docs/rbac",
+        href: "https://langfuse.com/docs/administration/rbac",
       },
       cell: ({ row }) => {
         const orgRole = row.getValue("orgRole") as MembersTableRow["orgRole"];
@@ -232,7 +232,7 @@ export function MembersTable({
             headerTooltip: {
               description:
                 "The role for this user in this specific project. This role overrides the default project role.",
-              href: "https://langfuse.com/docs/rbac",
+              href: "https://langfuse.com/docs/administration/rbac",
             },
             cell: ({
               row,
@@ -309,10 +309,13 @@ export function MembersTable({
   ];
 
   const [columnVisibility, setColumnVisibility] =
-    useColumnVisibility<MembersTableRow>("membersColumnVisibility", columns);
+    useColumnVisibility<MembersTableRow>(
+      project ? "membersColumnVisibilityProject" : "membersColumnVisibilityOrg",
+      columns,
+    );
 
   const [columnOrder, setColumnOrder] = useColumnOrder<MembersTableRow>(
-    "membersColumnOrder",
+    project ? "membersColumnOrderProject" : "membersColumnOrderOrg",
     columns,
   );
 
@@ -362,6 +365,7 @@ export function MembersTable({
       {showSettingsCard ? (
         <SettingsTableCard>
           <DataTable
+            tableName={project ? "projectMembers" : "orgMembers"}
             columns={columns}
             data={
               members.isLoading
@@ -393,6 +397,7 @@ export function MembersTable({
         </SettingsTableCard>
       ) : (
         <DataTable
+          tableName={project ? "projectMembers" : "orgMembers"}
           columns={columns}
           data={
             members.isLoading
