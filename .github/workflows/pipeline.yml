@@ -43,6 +43,49 @@ jobs:
       - name: lint web
         run: pnpm run lint
 
+  prettier-check:
+    runs-on: ubuntu-latest
+    needs:
+      - pre-job
+    if: needs.pre-job.outputs.should_skip != 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: "pnpm-lock.yaml"
+      - name: install dependencies
+        run: |
+          pnpm i
+      - name: Load default env
+        run: |
+          cp .env.dev.example .env
+      - name: Check formatting on changed files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA=${{ github.event.pull_request.base.sha }}
+          else
+            BASE_SHA=$(git merge-base origin/main HEAD)
+          fi
+          
+          echo "Checking files changed from $BASE_SHA to HEAD"
+          
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.css' | tr '\n' ' ')
+          
+          if [ -n "$CHANGED_FILES" ] && [ "$CHANGED_FILES" != " " ]; then
+            echo "Files to check: $CHANGED_FILES"
+            pnpm prettier --check --experimental-cli $CHANGED_FILES
+          else
+            echo "No JS/TS/CSS files changed - skipping prettier check"
+          fi
+
   test-docker-build:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -62,7 +105,9 @@ jobs:
         run: echo "NEXT_PUBLIC_BUILD_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build and run both images from compose
         run: |
-          docker compose -f docker-compose.build.yml up -d
+          docker compose --progress plain --verbose -f docker-compose.build.yml build --print > /tmp/bake.json
+          docker buildx bake -f /tmp/bake.json
+          docker compose --progress plain -f docker-compose.build.yml up -d
           sleep 5 # Wait for PostgreSQL to accept connections
       - name: Ensure no unhealthy status
         run: |
@@ -91,14 +136,10 @@ jobs:
         node-version: [20]
         postgres-version: [12, 15]
     steps:
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 10
       - uses: actions/checkout@v4
       - name: Install golang-migrate for Clickhouse migrations
         run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.2/migrate.linux-amd64.tar.gz | tar xvz
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xvz
           sudo mv migrate /usr/bin/migrate
           which migrate
       - uses: pnpm/action-setup@v3
@@ -124,6 +165,7 @@ jobs:
           cp .env.dev.example .env
           grep -v -e '^LANGFUSE_S3_BATCH_EXPORT_ENABLED=' -e '^NEXT_PUBLIC_LANGFUSE_RUN_NEXT_INIT=' .env.dev.example > .env
           echo "LANGFUSE_INGESTION_QUEUE_DELAY_MS=1" >> .env
+          echo "LANGFUSE_CACHE_PROMPT_ENABLED=false" >> .env
           echo "LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS=1" >> .env
       - name: Run dev containers
         run: |
@@ -169,14 +211,10 @@ jobs:
         postgres-version: [12, 15]
         deploy-mode: ["", "-azure", "-redis-cluster"]
     steps:
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 10
       - uses: actions/checkout@v4
       - name: Install golang-migrate for Clickhouse migrations
         run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.2/migrate.linux-amd64.tar.gz | tar xvz
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xvz
           sudo mv migrate /usr/bin/migrate
           which migrate
       - uses: pnpm/action-setup@v3
@@ -248,10 +286,6 @@ jobs:
         postgres-version: [12, 15]
         deploy-mode: ["", "-azure", "-redis-cluster"]
     steps:
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 10
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
         with:
@@ -273,7 +307,7 @@ jobs:
           pnpm install
       - name: Install golang-migrate for Clickhouse migrations
         run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.2/migrate.linux-amd64.tar.gz | tar xvz
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xvz
           sudo mv migrate /usr/bin/migrate
           which migrate
       - name: Load default env
@@ -334,7 +368,7 @@ jobs:
           cp .env.dev.example web/.env
       - name: Install golang-migrate for Clickhouse migrations
         run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.2/migrate.linux-amd64.tar.gz | tar xvz
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xvz
           sudo mv migrate /usr/bin/migrate
           which migrate
       - name: Run + migrate
@@ -388,14 +422,12 @@ jobs:
           pnpm install
       - name: Install golang-migrate for Clickhouse migrations
         run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.2/migrate.linux-amd64.tar.gz | tar xvz
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xvz
           sudo mv migrate /usr/bin/migrate
           which migrate
       - name: Load default env
         run: |
           cp .env.dev.example .env
-          echo "LANGFUSE_CACHE_API_KEY_ENABLED=true" >> .env
-          echo "LANGFUSE_CACHE_PROMPT_ENABLED=true" >> .env
       - name: Run + migrate
         run: |
           docker compose -f docker-compose.dev.yml up -d
@@ -433,6 +465,7 @@ jobs:
     needs:
       [
         lint,
+        prettier-check,
         tests-web-sync,
         tests-worker,
         e2e-tests,
@@ -443,13 +476,21 @@ jobs:
     if: always()
     steps:
       - name: Successful deploy
-        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        if: ${{ !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
         run: exit 0
         working-directory: .
       - name: Failing deploy
-        if: ${{ contains(needs.*.result, 'failure') }}
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: exit 1
         working-directory: .
+      - name: Notify Slack
+        uses: ravsamhq/notify-slack-action@v2
+        if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        with:
+          status: ${{ job.status }}
+          notify_when: "failure"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   push-docker-image:
     needs: all-ci-passed

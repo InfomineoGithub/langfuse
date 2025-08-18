@@ -6,6 +6,7 @@ import {
 } from "../../interfaces/customLLMProviderConfigSchemas";
 import { TokenCountDelegate } from "../ingestion/processEventBatch";
 import { AuthHeaderValidVerificationResult } from "../auth/types";
+import { JSONObjectSchema } from "../../utils/zod";
 
 /* eslint-disable no-unused-vars */
 // disable lint as this is exported and used in web/worker
@@ -113,8 +114,11 @@ export enum ChatMessageRole {
   User = "user",
   Assistant = "assistant",
   Tool = "tool",
+  Model = "model", // Google Gemini assistant format
 }
 
+// Thought: should placeholder not semantically be part of this, because it can be
+// PublicAPICreated of type? Works for now though.
 export enum ChatMessageType {
   System = "system",
   Developer = "developer",
@@ -122,7 +126,9 @@ export enum ChatMessageType {
   AssistantText = "assistant-text",
   AssistantToolCall = "assistant-tool-call",
   ToolResult = "tool-result",
+  ModelText = "model-text",
   PublicAPICreated = "public-api-created",
+  Placeholder = "placeholder",
 }
 
 export const SystemMessageSchema = z.object({
@@ -153,6 +159,13 @@ export const AssistantTextMessageSchema = z.object({
 });
 export type AssistantTextMessage = z.infer<typeof AssistantTextMessageSchema>;
 
+export const ModelMessageSchema = z.object({
+  type: z.literal(ChatMessageType.ModelText),
+  role: z.literal(ChatMessageRole.Model),
+  content: z.string(),
+});
+export type ModelMessage = z.infer<typeof ModelMessageSchema>;
+
 export const AssistantToolCallMessageSchema = z.object({
   type: z.literal(ChatMessageType.AssistantToolCall),
   role: z.literal(ChatMessageRole.Assistant),
@@ -171,6 +184,17 @@ export const ToolResultMessageSchema = z.object({
 });
 export type ToolResultMessage = z.infer<typeof ToolResultMessageSchema>;
 
+export const PlaceholderMessageSchema = z.object({
+  type: z.literal(ChatMessageType.Placeholder),
+  name: z
+    .string()
+    .regex(
+      /^[a-zA-Z][a-zA-Z0-9_]*$/,
+      "Placeholder name must start with a letter and contain only alphanumeric characters and underscores",
+    ),
+});
+export type PlaceholderMessage = z.infer<typeof PlaceholderMessageSchema>;
+
 export const ChatMessageDefaultRoleSchema = z.enum(ChatMessageRole);
 export const ChatMessageSchema = z.union([
   SystemMessageSchema,
@@ -179,10 +203,11 @@ export const ChatMessageSchema = z.union([
   AssistantTextMessageSchema,
   AssistantToolCallMessageSchema,
   ToolResultMessageSchema,
+  ModelMessageSchema,
   z
     .object({
       role: z.union([ChatMessageDefaultRoleSchema, z.string()]), // Users may ingest any string as role via API/SDK
-      content: z.string(),
+      content: z.union([z.string(), z.array(z.any()), z.any()]), // Support arbitrary content types for message placeholders
     })
     .transform((msg) => {
       return {
@@ -193,12 +218,18 @@ export const ChatMessageSchema = z.union([
 ]);
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
-export type ChatMessageWithId = ChatMessage & { id: string };
+export type ChatMessageWithId =
+  | (ChatMessage & { id: string })
+  | (PlaceholderMessage & { id: string });
+export type ChatMessageWithIdNoPlaceholders = ChatMessage & { id: string };
 
-export const PromptChatMessageSchema = z.object({
-  role: z.string(),
-  content: z.string(),
-});
+export const PromptChatMessageSchema = z.union([
+  z.object({
+    role: z.string(),
+    content: z.string(),
+  }),
+  PlaceholderMessageSchema,
+]);
 export const PromptChatMessageListSchema = z.array(PromptChatMessageSchema);
 
 export type PromptVariable = { name: string; value: string; isUsed: boolean };
@@ -206,17 +237,11 @@ export type PromptVariable = { name: string; value: string; isUsed: boolean };
 export enum LLMAdapter {
   Anthropic = "anthropic",
   OpenAI = "openai",
-  Atla = "atla",
   Azure = "azure",
   Bedrock = "bedrock",
   VertexAI = "google-vertex-ai",
   GoogleAIStudio = "google-ai-studio",
 }
-
-export const SYSTEM_ROLES: string[] = [
-  ChatMessageRole.System,
-  ChatMessageRole.Developer,
-];
 
 export const TextPromptContentSchema = z.string().min(1, "Enter a prompt");
 
@@ -247,6 +272,7 @@ export const ZodModelConfig = z.object({
   max_tokens: z.coerce.number().optional(),
   temperature: z.coerce.number().optional(),
   top_p: z.coerce.number().optional(),
+  providerOptions: JSONObjectSchema.optional(),
 });
 
 // Experiment config
@@ -261,7 +287,7 @@ export const ExperimentMetadataSchema = z
   .strict();
 export type ExperimentMetadata = z.infer<typeof ExperimentMetadataSchema>;
 
-// NOTE: Update docs page when changing this! https://langfuse.com/docs/playground#openai-playground--anthropic-playground
+// NOTE: Update docs page when changing this! https://langfuse.com/docs/prompt-management/features/playground#openai-playground--anthropic-playground
 // WARNING: The first entry in the array is chosen as the default model to add LLM API keys
 export const openAIModels = [
   "gpt-4.1",
@@ -270,6 +296,12 @@ export const openAIModels = [
   "gpt-4.1-mini-2025-04-14",
   "gpt-4.1-nano",
   "gpt-4.1-nano-2025-04-14",
+  "gpt-5",
+  "gpt-5-2025-08-07",
+  "gpt-5-mini",
+  "gpt-5-mini-2025-08-07",
+  "gpt-5-nano",
+  "gpt-5-nano-2025-08-07",
   "o3",
   "o3-2025-04-16",
   "o4-mini",
@@ -303,10 +335,11 @@ export const openAIModels = [
 
 export type OpenAIModel = (typeof openAIModels)[number];
 
-// NOTE: Update docs page when changing this! https://langfuse.com/docs/playground#openai-playground--anthropic-playground
+// NOTE: Update docs page when changing this! https://langfuse.com/docs/prompt-management/features/playground#openai-playground--anthropic-playground
 // WARNING: The first entry in the array is chosen as the default model to add LLM API keys
 export const anthropicModels = [
   "claude-sonnet-4-20250514",
+  "claude-opus-4-1-20250805",
   "claude-opus-4-20250514",
   "claude-3-7-sonnet-20250219",
   "claude-3-5-sonnet-20241022",
@@ -322,9 +355,12 @@ export const anthropicModels = [
 
 // WARNING: The first entry in the array is chosen as the default model to add LLM API keys
 export const vertexAIModels = [
-  "gemini-2.0-flash",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite-preview-06-17",
   "gemini-2.5-pro-preview-05-06",
   "gemini-2.5-flash-preview-05-20",
+  "gemini-2.0-flash",
   "gemini-2.0-pro-exp-02-05",
   "gemini-2.0-flash-001",
   "gemini-2.0-flash-lite-preview-02-05",
@@ -336,6 +372,9 @@ export const vertexAIModels = [
 
 // WARNING: The first entry in the array is chosen as the default model to add LLM API keys. Make sure it supports top_p, max_tokens and temperature.
 export const googleAIStudioModels = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash-lite-preview-06-17",
   "gemini-2.5-pro-preview-05-06",
   "gemini-2.5-flash-preview-05-20",
   "gemini-2.0-flash",
@@ -347,8 +386,6 @@ export const googleAIStudioModels = [
   "gemini-1.5-flash-8b",
 ] as const;
 
-export const atlaModels = ["atla-selene", "atla-selene-20250214"] as const;
-
 export type AnthropicModel = (typeof anthropicModels)[number];
 export type VertexAIModel = (typeof vertexAIModels)[number];
 export const supportedModels = {
@@ -358,7 +395,6 @@ export const supportedModels = {
   [LLMAdapter.GoogleAIStudio]: googleAIStudioModels,
   [LLMAdapter.Azure]: [],
   [LLMAdapter.Bedrock]: [],
-  [LLMAdapter.Atla]: atlaModels,
 } as const;
 
 export type LLMFunctionCall = {
@@ -393,11 +429,17 @@ export type LLMApiKey =
     ? z.infer<typeof LLMApiKeySchema>
     : never;
 
+// NOTE: This string is whitelisted in the TS SDK to allow ingestion of traces by Langfuse. Please mirror edits to this string in https://github.com/langfuse/langfuse-js/blob/main/langfuse-core/src/index.ts.
+export const PROMPT_EXPERIMENT_ENVIRONMENT =
+  "langfuse-prompt-experiment" as const;
+
+type PromptExperimentEnvironment = typeof PROMPT_EXPERIMENT_ENVIRONMENT;
+
 export type TraceParams = {
   traceName: string;
   traceId: string;
   projectId: string;
-  tags: string[];
+  environment: PromptExperimentEnvironment;
   tokenCountDelegate: TokenCountDelegate;
   authCheck: AuthHeaderValidVerificationResult;
 };

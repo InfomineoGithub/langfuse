@@ -6,6 +6,8 @@ import {
   BatchActionType,
 } from "../features/batchAction/types";
 import { BatchTableNames } from "../interfaces/tableNames";
+import { EventActionSchema } from "../domain";
+import { PromptDomainSchema } from "../domain/prompts";
 
 export const IngestionEvent = z.object({
   data: z.object({
@@ -38,6 +40,21 @@ export const ScoresQueueEventSchema = z.object({
   projectId: z.string(),
   scoreIds: z.array(z.string()),
 });
+export const DatasetQueueEventSchema = z.discriminatedUnion("deletionType", [
+  // Delete all run items for a specific dataset
+  z.object({
+    deletionType: z.literal("dataset"),
+    projectId: z.string(),
+    datasetId: z.string(),
+  }),
+  // Delete all run items for multiple dataset runs (also used for single run deletion)
+  z.object({
+    deletionType: z.literal("dataset-runs"),
+    projectId: z.string(),
+    datasetId: z.string(),
+    datasetRunIds: z.array(z.string()),
+  }),
+]);
 export const ProjectQueueEventSchema = z.object({
   projectId: z.string(),
   orgId: z.string(),
@@ -100,6 +117,24 @@ export const BatchActionProcessingEventSchema = z.discriminatedUnion(
       type: z.enum(BatchActionType),
     }),
     z.object({
+      actionId: z.literal("session-add-to-annotation-queue"),
+      projectId: z.string(),
+      query: BatchActionQuerySchema,
+      tableName: z.enum(BatchTableNames),
+      cutoffCreatedAt: z.date(),
+      targetId: z.string().optional(),
+      type: z.enum(BatchActionType),
+    }),
+    z.object({
+      actionId: z.literal("observation-add-to-annotation-queue"),
+      projectId: z.string(),
+      query: BatchActionQuerySchema,
+      tableName: z.enum(BatchTableNames),
+      cutoffCreatedAt: z.date(),
+      targetId: z.string().optional(),
+      type: z.enum(BatchActionType),
+    }),
+    z.object({
       actionId: z.literal("eval-create"),
       targetObject: z.enum(["trace", "dataset"]),
       configId: z.string(),
@@ -129,6 +164,32 @@ export const DeadLetterRetryQueueEventSchema = z.object({
   timestamp: z.date(),
 });
 
+export const WebhookOutboundEnvelopeSchema = z.object({
+  prompt: PromptDomainSchema,
+  action: EventActionSchema,
+  type: z.literal("prompt-version"),
+});
+
+export const WebhookInputSchema = z.object({
+  projectId: z.string(),
+  automationId: z.string(),
+  executionId: z.string(),
+  payload: WebhookOutboundEnvelopeSchema,
+});
+
+export type WebhookInput = z.infer<typeof WebhookInputSchema>;
+export const EntityChangeEventSchema = z.discriminatedUnion("entityType", [
+  z.object({
+    entityType: z.literal("prompt-version"),
+    projectId: z.string(),
+    promptId: z.string(),
+    action: EventActionSchema,
+    prompt: PromptDomainSchema,
+  }),
+  // Add other entity types here in the future
+]);
+export type EntityChangeEventType = z.infer<typeof EntityChangeEventSchema>;
+
 export type CreateEvalQueueEventType = z.infer<
   typeof CreateEvalQueueEventSchema
 >;
@@ -136,6 +197,7 @@ export type BatchExportJobType = z.infer<typeof BatchExportJobSchema>;
 export type TraceQueueEventType = z.infer<typeof TraceQueueEventSchema>;
 export type TracesQueueEventType = z.infer<typeof TracesQueueEventSchema>;
 export type ScoresQueueEventType = z.infer<typeof ScoresQueueEventSchema>;
+export type DatasetQueueEventType = z.infer<typeof DatasetQueueEventSchema>;
 export type ProjectQueueEventType = z.infer<typeof ProjectQueueEventSchema>;
 export type DatasetRunItemUpsertEventType = z.infer<
   typeof DatasetRunItemUpsertEventSchema
@@ -161,6 +223,15 @@ export type DeadLetterRetryQueueEventType = z.infer<
   typeof DeadLetterRetryQueueEventSchema
 >;
 
+export type WebhookQueueEventType = z.infer<typeof WebhookInputSchema>;
+
+export const RetryBaggage = z.object({
+  originalJobTimestamp: z.date(),
+  attempt: z.number(),
+});
+
+export type RetryBaggage = z.infer<typeof RetryBaggage>;
+
 export enum QueueName {
   TraceUpsert = "trace-upsert", // Ingestion pipeline adds events on each Trace upsert
   TraceDelete = "trace-delete",
@@ -183,7 +254,10 @@ export enum QueueName {
   BatchActionQueue = "batch-action-queue",
   CreateEvalQueue = "create-eval-queue",
   ScoreDelete = "score-delete",
+  DatasetDelete = "dataset-delete-queue",
   DeadLetterRetryQueue = "dead-letter-retry-queue",
+  WebhookQueue = "webhook-queue",
+  EntityChangeQueue = "entity-change-queue",
 }
 
 export enum QueueJobs {
@@ -208,7 +282,10 @@ export enum QueueJobs {
   BatchActionProcessingJob = "batch-action-processing-job",
   CreateEvalJob = "create-eval-job",
   ScoreDelete = "score-delete",
+  DatasetDelete = "dataset-delete-job",
   DeadLetterRetryJob = "dead-letter-retry-job",
+  WebhookJob = "webhook-job",
+  EntityChangeJob = "entity-change-job",
 }
 
 export type TQueueJobTypes = {
@@ -230,6 +307,12 @@ export type TQueueJobTypes = {
     payload: ScoresQueueEventType;
     name: QueueJobs.ScoreDelete;
   };
+  [QueueName.DatasetDelete]: {
+    timestamp: Date;
+    id: string;
+    payload: DatasetQueueEventType;
+    name: QueueJobs.DatasetDelete;
+  };
   [QueueName.ProjectDelete]: {
     timestamp: Date;
     id: string;
@@ -247,6 +330,7 @@ export type TQueueJobTypes = {
     id: string;
     payload: EvalExecutionEventType;
     name: QueueJobs.EvaluationExecution;
+    retryBaggage?: RetryBaggage;
   };
   [QueueName.BatchExport]: {
     timestamp: Date;
@@ -271,6 +355,7 @@ export type TQueueJobTypes = {
     id: string;
     payload: ExperimentCreateEventType;
     name: QueueJobs.ExperimentCreateJob;
+    retryBaggage?: RetryBaggage;
   };
   [QueueName.PostHogIntegrationProcessingQueue]: {
     timestamp: Date;
@@ -307,5 +392,17 @@ export type TQueueJobTypes = {
     id: string;
     payload: DeadLetterRetryQueueEventType;
     name: QueueJobs.DeadLetterRetryJob;
+  };
+  [QueueName.WebhookQueue]: {
+    timestamp: Date;
+    id: string;
+    payload: WebhookInput;
+    name: QueueJobs.WebhookJob;
+  };
+  [QueueName.EntityChangeQueue]: {
+    timestamp: Date;
+    id: string;
+    payload: EntityChangeEventType;
+    name: QueueJobs.EntityChangeJob;
   };
 };

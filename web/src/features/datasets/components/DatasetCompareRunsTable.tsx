@@ -2,7 +2,7 @@ import { DataTable } from "@/src/components/table/data-table";
 import { DataTableToolbar } from "@/src/components/table/data-table-toolbar";
 import TableLink from "@/src/components/table/table-link";
 import { type LangfuseColumnDef } from "@/src/components/table/types";
-import { IOTableCell } from "@/src/components/ui/CodeJsonViewer";
+import { IOTableCell } from "@/src/components/ui/IOTableCell";
 import useColumnVisibility from "@/src/features/column-visibility/hooks/useColumnVisibility";
 import { getDatasetRunAggregateColumnProps } from "@/src/features/datasets/components/DatasetRunAggregateColumnHelpers";
 import { useDatasetRunAggregateColumns } from "@/src/features/datasets/hooks/useDatasetRunAggregateColumns";
@@ -30,6 +30,10 @@ import { PeekDatasetCompareDetail } from "@/src/components/table/peek/peek-datas
 import { useRowHeightLocalStorage } from "@/src/components/table/data-table-row-height-switch";
 import { useDetailPageLists } from "@/src/features/navigate-detail-pages/context";
 import { useDatasetComparePeekNavigation } from "@/src/components/table/peek/hooks/useDatasetComparePeekNavigation";
+import {
+  DatasetCompareMetricsProvider,
+  useDatasetCompareMetrics,
+} from "@/src/features/datasets/contexts/DatasetCompareMetricsContext";
 
 export type RunMetrics = {
   id: string;
@@ -98,20 +102,14 @@ const getRefetchInterval = (
   return false;
 };
 
-const DATASET_RUN_METRICS = ["scores", "resourceMetrics"] as const;
-export type DatasetRunMetric = (typeof DATASET_RUN_METRICS)[number];
-
-export function DatasetCompareRunsTable(props: {
+function DatasetCompareRunsTableInternal(props: {
   projectId: string;
   datasetId: string;
   runIds: string[];
   runsData?: RouterOutputs["datasets"]["baseRunDataByDatasetId"];
   localExperiments: { key: string; value: string }[];
 }) {
-  const [selectedMetrics, setSelectedMetrics] = useState<DatasetRunMetric[]>([
-    "scores",
-    "resourceMetrics",
-  ]);
+  const { toggleMetric, isMetricSelected } = useDatasetCompareMetrics();
   const [isMetricsDropdownOpen, setIsMetricsDropdownOpen] = useState(false);
   const [unchangedCounts, setUnchangedCounts] = useState<
     Record<string, number>
@@ -295,7 +293,6 @@ export function DatasetCompareRunsTable(props: {
       runsData: props.runsData ?? [],
       scoreKeyToDisplayName,
       cellsLoading: !scoreKeysAndProps.data,
-      selectedMetrics,
     });
 
   const columns: LangfuseColumnDef<DatasetCompareRunRowData>[] = [
@@ -406,26 +403,14 @@ export function DatasetCompareRunsTable(props: {
               onPointerDownOutside={() => setIsMetricsDropdownOpen(false)}
             >
               <DropdownMenuCheckboxItem
-                checked={selectedMetrics.includes("scores")}
-                onCheckedChange={() => {
-                  setSelectedMetrics((prev) =>
-                    prev.includes("scores")
-                      ? prev.filter((m) => m !== "scores")
-                      : [...prev, "scores"],
-                  );
-                }}
+                checked={isMetricSelected("scores")}
+                onCheckedChange={() => toggleMetric("scores")}
               >
                 Scores
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
-                checked={selectedMetrics.includes("resourceMetrics")}
-                onCheckedChange={() =>
-                  setSelectedMetrics((prev) =>
-                    prev.includes("resourceMetrics")
-                      ? prev.filter((m) => m !== "resourceMetrics")
-                      : [...prev, "resourceMetrics"],
-                  )
-                }
+                checked={isMetricSelected("resourceMetrics")}
+                onCheckedChange={() => toggleMetric("resourceMetrics")}
               >
                 Latency and cost
               </DropdownMenuCheckboxItem>
@@ -434,6 +419,7 @@ export function DatasetCompareRunsTable(props: {
         }
       />
       <DataTable
+        tableName={"datasetCompareRuns"}
         columns={columns}
         columnVisibility={columnVisibility}
         onColumnVisibilityChange={setColumnVisibility}
@@ -478,12 +464,25 @@ export function DatasetCompareRunsTable(props: {
               projectId={props.projectId}
               scoreKeyToDisplayName={scoreKeyToDisplayName}
               runsData={props.runsData ?? []}
-              selectedMetrics={selectedMetrics}
               row={row}
             />
           ),
         }}
       />
     </>
+  );
+}
+
+export function DatasetCompareRunsTable(props: {
+  projectId: string;
+  datasetId: string;
+  runIds: string[];
+  runsData?: RouterOutputs["datasets"]["baseRunDataByDatasetId"];
+  localExperiments: { key: string; value: string }[];
+}) {
+  return (
+    <DatasetCompareMetricsProvider>
+      <DatasetCompareRunsTableInternal {...props} />
+    </DatasetCompareMetricsProvider>
   );
 }

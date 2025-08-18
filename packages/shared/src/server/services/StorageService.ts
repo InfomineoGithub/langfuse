@@ -28,20 +28,21 @@ type UploadFile = {
 };
 
 export interface StorageService {
-  uploadFile(params: UploadFile): Promise<{ signedUrl: string }>;
+  uploadFile(params: UploadFile): Promise<{ signedUrl: string }>; // eslint-disable-line no-unused-vars
 
-  uploadJson(path: string, body: Record<string, unknown>[]): Promise<void>;
+  uploadJson(path: string, body: Record<string, unknown>[]): Promise<void>; // eslint-disable-line no-unused-vars
 
-  download(path: string): Promise<string>;
+  download(path: string): Promise<string>; // eslint-disable-line no-unused-vars
 
-  listFiles(prefix: string): Promise<{ file: string; createdAt: Date }[]>;
+  listFiles(prefix: string): Promise<{ file: string; createdAt: Date }[]>; // eslint-disable-line no-unused-vars
 
   getSignedUrl(
-    fileName: string,
-    ttlSeconds: number,
-    asAttachment?: boolean,
+    fileName: string, // eslint-disable-line no-unused-vars
+    ttlSeconds: number, // eslint-disable-line no-unused-vars
+    asAttachment?: boolean, // eslint-disable-line no-unused-vars
   ): Promise<string>;
 
+  // eslint-disable-next-line no-unused-vars
   getSignedUploadUrl(params: {
     path: string;
     ttlSeconds: number;
@@ -50,7 +51,7 @@ export interface StorageService {
     contentLength: number;
   }): Promise<string>;
 
-  deleteFiles(paths: string[]): Promise<void>;
+  deleteFiles(paths: string[]): Promise<void>; // eslint-disable-line no-unused-vars
 }
 
 export class StorageServiceFactory {
@@ -103,6 +104,7 @@ export class StorageServiceFactory {
   }
 }
 
+let azureContainersExists: Record<string, boolean> = {};
 class AzureBlobStorageService implements StorageService {
   private client: ContainerClient;
   private container: string;
@@ -138,8 +140,18 @@ class AzureBlobStorageService implements StorageService {
   }
 
   private async createContainerIfNotExists(): Promise<void> {
+    // Skip container existence check if environment variable is set
+    if (env.LANGFUSE_AZURE_SKIP_CONTAINER_CHECK === "true") {
+      return;
+    }
+
     try {
+      if (azureContainersExists[this.container]) {
+        return; // Container already exists, no need to create it again
+      }
       await this.client.createIfNotExists();
+      azureContainersExists[this.container] = true; // Mark container as created
+      logger.info(`Azure Blob Storage container ${this.container} created`);
     } catch (err) {
       logger.error(
         `Failed to create Azure Blob Storage container ${this.container}`,
