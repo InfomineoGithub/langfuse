@@ -5,7 +5,6 @@ import { checkContainerHealth } from "../features/health";
 import { logger } from "@langfuse/shared/src/server";
 const router = express.Router();
 
-
 router.get<{}, { status: string }>("/health", async (_req, res) => {
   try {
     await checkContainerHealth(res, false);
