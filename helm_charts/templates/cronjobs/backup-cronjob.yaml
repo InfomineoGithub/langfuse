@@ -1,0 +1,55 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.clickhouse.fullnameOverride }}-backup
+  namespace: chatbot
+
+spec:
+  # Weekly at midnight saturday 
+  schedule: "0 0 * * 6"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: clickhouse-backup
+              image: alexakulov/clickhouse-backup:2.6.0
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args:
+                - >
+                  clickhouse-backup create_and_upload weekly-$(date +\%Y-\%m-\%d)
+              env:
+                - name: CLICKHOUSE_HOST
+                  value: {{ .Values.clickhouse.fullnameOverride }}
+                - name: CLICKHOUSE_PORT
+                  value: "9000"
+                - name: CLICKHOUSE_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: my-clickhouse-secret
+                      key: username
+                - name: CLICKHOUSE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: my-clickhouse-secret
+                      key: password
+              volumeMounts:
+                - name: gcs-credentials
+                  mountPath: /etc/clickhouse-backup
+                  readOnly: true
+                - name: backup-config
+                  mountPath: /etc/clickhouse-backup/config.yml
+                  subPath: config.yml
+          volumes:
+            - name: gcs-credentials
+              secret:
+                secretName: {{ .Values.backup.gcsSecretName }}
+            - name: backup-config
+              configMap:
+                name: {{ .Values.clickhouse.fullnameOverride }}-backup-config
+{{- end }}
