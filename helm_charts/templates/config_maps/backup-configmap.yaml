@@ -13,7 +13,7 @@ data:
       username: "$CLICKHOUSE_USER"
       password: "$CLICKHOUSE_PASSWORD"
       host: "$CLICKHOUSE_HOST"
-      port: "$CLICKHOUSE_PORT"
+      port: $CLICKHOUSE_PORT
     gcs:
       bucket: {{ .Values.backup.gcsBucket }}
       path: {{ .Values.backup.gcsPath }}
