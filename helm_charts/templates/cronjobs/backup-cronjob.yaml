@@ -3,10 +3,9 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: {{ .Values.clickhouse.fullnameOverride }}-backup
-  namespace: chatbot
-
+  namespace: {{ .Values.namespace }}
 spec:
-  # Weekly at midnight saturday 
+  # Weekly at midnight Saturday
   schedule: "0 0 * * 6"
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
@@ -21,10 +20,10 @@ spec:
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args:
-                - >
+                - |
                   apk add --no-cache gettext && \
-                  envsubst < /etc/clickhouse-backup/config.yml > /etc/clickhouse-backup/config.rendered.yml &&
-                  clickhouse-backup --config /etc/clickhouse-backup/config.rendered.yml create_remote weekly-$(date +%Y%m%d-%H%M)
+                  envsubst < /etc/clickhouse-backup/config.yml > /tmp/config.yml && \
+                  clickhouse-backup --config /tmp/config.yml create_remote weekly-$(date +%Y%m%d-%H%M)
               env:
                 - name: CLICKHOUSE_HOST
                   value: {{ .Values.clickhouse.fullnameOverride }}
@@ -51,9 +50,8 @@ spec:
           volumes:
             - name: gcs-credentials
               secret:
-                secretName: clickhouse-backup-sa-secret
+                secretName: {{ .Values.backup.gcsSecretName }}
             - name: backup-config
               configMap:
                 name: {{ .Values.clickhouse.fullnameOverride }}-backup-config
-
 {{- end }}
