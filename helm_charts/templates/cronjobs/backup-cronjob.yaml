@@ -24,7 +24,7 @@ spec:
                 - >
                   apk add --no-cache gettext && \
                   envsubst < /etc/clickhouse-backup/config.yml > /etc/clickhouse-backup/config.rendered.yml &&
-                  clickhouse-backup --config /etc/clickhouse-backup/config.rendered.yml create_and_upload weekly-$(date +\%Y-\%m-\%d)
+                  clickhouse-backup --config /etc/clickhouse-backup/config.rendered.yml create_remote weekly-$(date +%Y%m%d-%H%M)
               env:
                 - name: CLICKHOUSE_HOST
                   value: {{ .Values.clickhouse.fullnameOverride }}
