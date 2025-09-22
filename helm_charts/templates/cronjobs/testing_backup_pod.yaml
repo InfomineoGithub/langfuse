@@ -27,7 +27,8 @@ spec:
               key: password
       volumeMounts:
         - name: gcs-credentials
-          mountPath: /etc/clickhouse-backup
+          mountPath: /etc/clickhouse-backup/backup-sa-key.json
+          subPath: backup-sa-key.json
           readOnly: true
         - name: backup-config
           mountPath: /etc/clickhouse-backup/config.yml
