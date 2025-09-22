@@ -19,12 +19,12 @@ spec:
           valueFrom:
             secretKeyRef:
               name: my-clickhouse-secret
-              key: username
+              key: backup_username
         - name: CLICKHOUSE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: my-clickhouse-secret
-              key: password
+              key: backup_password
       volumeMounts:
         - name: gcs-credentials
           mountPath: /etc/clickhouse-backup/backup-sa-key.json
