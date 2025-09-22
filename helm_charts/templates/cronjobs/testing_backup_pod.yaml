@@ -30,7 +30,7 @@ spec:
           mountPath: /etc/clickhouse-backup
           readOnly: true
         - name: backup-config
-          mountPath: /etc/clickhouse-backup/config.yml.tpl
+          mountPath: /etc/clickhouse-backup/config.yml
           subPath: config.yml.tpl
   volumes:
     - name: gcs-credentials
@@ -38,4 +38,4 @@ spec:
         secretName: clickhouse-backup-sa-secret
     - name: backup-config
       configMap:
-        name: my-clickhouse-backup-config
+        name: {{ .Values.clickhouse.fullnameOverride }}-backup-config
