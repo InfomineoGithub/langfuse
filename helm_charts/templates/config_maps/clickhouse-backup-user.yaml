@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-backup-user
+  namespace: chatbot
+data:
+  create-backup-user.sql: |
+    CREATE USER IF NOT EXISTS backup IDENTIFIED BY 'supersecret';
+    GRANT ALTER, SELECT, INSERT, DROP, CREATE ON *.* TO backup;
