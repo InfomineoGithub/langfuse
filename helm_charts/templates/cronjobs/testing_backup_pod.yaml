@@ -31,7 +31,7 @@ spec:
           readOnly: true
         - name: backup-config
           mountPath: /etc/clickhouse-backup/config.yml
-          subPath: config.yml.tpl
+          subPath: config.yml
   volumes:
     - name: gcs-credentials
       secret:
