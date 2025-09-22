@@ -14,6 +14,8 @@ data:
       password: "$CLICKHOUSE_PASSWORD"
       host: "$CLICKHOUSE_HOST"
       port: $CLICKHOUSE_PORT
+      freeze_by_part: true
+      skip_tables: []
     gcs:
       bucket: {{ .Values.backup.gcsBucket }}
       path: {{ .Values.backup.gcsPath }}
