@@ -40,7 +40,8 @@ spec:
                       key: password
               volumeMounts:
                 - name: gcs-credentials
-                  mountPath: /etc/clickhouse-backup
+                  mountPath: /etc/clickhouse-backup/backup-sa-key.json
+                  subPath: backup-sa-key.json
                   readOnly: true
                 - name: backup-config
                   mountPath: /etc/clickhouse-backup/config.yml
@@ -48,8 +49,9 @@ spec:
           volumes:
             - name: gcs-credentials
               secret:
-                secretName: {{ .Values.backup.gcsSecretName }}
+                secretName: clickhouse-backup-sa-secret
             - name: backup-config
               configMap:
                 name: {{ .Values.clickhouse.fullnameOverride }}-backup-config
+
 {{- end }}
