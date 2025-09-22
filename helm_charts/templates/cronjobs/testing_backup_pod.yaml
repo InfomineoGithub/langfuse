@@ -12,7 +12,7 @@ spec:
       args: ["sleep infinity"]
       env:
         - name: CLICKHOUSE_HOST
-          value: my-clickhouse  # same as .Values.clickhouse.fullnameOverride
+          value: {{ .Values.clickhouse.fullnameOverride }} 
         - name: CLICKHOUSE_PORT
           value: "9000"
         - name: CLICKHOUSE_USER
