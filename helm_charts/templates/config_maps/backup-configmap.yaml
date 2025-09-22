@@ -14,6 +14,9 @@ data:
       password: "$CLICKHOUSE_PASSWORD"
       host: "$CLICKHOUSE_HOST"
       port: $CLICKHOUSE_PORT
+      cluster_name: "default" 
+      cluster_username: "$CLICKHOUSE_USER"
+      cluster_password: "$CLICKHOUSE_PASSWORD"
       freeze_by_part: true
       skip_tables: []
     gcs:
