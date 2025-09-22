@@ -12,7 +12,7 @@ spec:
       args: ["sleep infinity"]
       env:
         - name: CLICKHOUSE_HOST
-          value: {{ .Values.clickhouse.fullnameOverride }} 
+          value: {{ .Values.clickhouse.fullnameOverride }}-headless.{{ .Values.namespace }}.svc.cluster.local
         - name: CLICKHOUSE_PORT
           value: "9000"
         - name: CLICKHOUSE_USER
