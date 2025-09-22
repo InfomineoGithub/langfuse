@@ -17,7 +17,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: clickhouse-backup
-              image: alexakulov/clickhouse-backup:2.6.0
+              image: alexakulov/clickhouse-backup:latest
               imagePullPolicy: IfNotPresent
               command: ["/bin/sh", "-c"]
               args:
