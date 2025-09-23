@@ -13,7 +13,7 @@ data:
       username: "{{ .Values.clickhouse.auth.username }}"
       password: "{{ .Values.clickhouse.auth.password }}"
       host: "localhost"
-      port: "9000"
+      port: 9000
       cluster_name: "default" 
       cluster_username: "{{ .Values.clickhouse.auth.username }}"
       cluster_password: "{{ .Values.clickhouse.auth.password }}"
