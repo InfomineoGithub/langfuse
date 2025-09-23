@@ -1,3 +1,4 @@
+# templates/backup-cronjob.yaml
 {{- if .Values.backup.enabled }}
 apiVersion: batch/v1
 kind: CronJob
@@ -13,45 +14,23 @@ spec:
     spec:
       template:
         spec:
+          # Use the ServiceAccount we created above
+          serviceAccountName: {{ .Values.clickhouse.fullnameOverride }}-backup-sa
           restartPolicy: OnFailure
           containers:
-            - name: clickhouse-backup
-              image: alexakulov/clickhouse-backup:latest
-              imagePullPolicy: IfNotPresent
-              command: ["/bin/sh", "-c"]
-              args:
-                - |
-                  apk add --no-cache gettext && \
-                  envsubst < /etc/clickhouse-backup/config.yml > /tmp/config.yml && \
-                  clickhouse-backup --config /tmp/config.yml create_remote weekly-$(date +%Y%m%d-%H%M)
-              env:
-                - name: CLICKHOUSE_HOST
-                  value: {{ .Values.clickhouse.fullnameOverride }}-headless.{{ .Values.namespace }}.svc.cluster.local
-                - name: CLICKHOUSE_PORT
-                  value: "9000"
-                - name: CLICKHOUSE_USER
-                  valueFrom:
-                    secretKeyRef:
-                      name: my-clickhouse-secret
-                      key: username
-                - name: CLICKHOUSE_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: my-clickhouse-secret
-                      key: password
-              volumeMounts:
-                - name: gcs-credentials
-                  mountPath: /etc/clickhouse-backup/backup-sa-key.json
-                  subPath: backup-sa-key.json
-                  readOnly: true
-                - name: backup-config
-                  mountPath: /etc/clickhouse-backup/config.yml
-                  subPath: config.yml
-          volumes:
-            - name: gcs-credentials
-              secret:
-                secretName: {{ .Values.backup.gcsSecretName }}
-            - name: backup-config
-              configMap:
-                name: {{ .Values.clickhouse.fullnameOverride }}-backup-config
+          - name: clickhouse-backup-trigger
+            # An image that includes kubectl
+            image: bitnami/kubectl:latest
+            imagePullPolicy: IfNotPresent
+            command: ["/bin/sh", "-c"]
+            # This is the command that triggers the backup inside the sidecar.
+            # It targets the first pod (-0-0) and the backup tool coordinates the rest.
+            args:
+            - |
+              echo "Triggering ClickHouse backup in pod {{ .Values.clickhouse.fullnameOverride }}-0-0..."
+              kubectl exec "{{ .Values.clickhouse.fullnameOverride }}-0-0" \
+                --namespace {{ .Values.namespace }} \
+                -c clickhouse-backup -- /bin/sh -c \
+                'clickhouse-backup --config /tmp/config.yml create_remote weekly-$(date +%Y%m%d-%H%M)'
+              echo "Backup trigger command finished."
 {{- end }}
