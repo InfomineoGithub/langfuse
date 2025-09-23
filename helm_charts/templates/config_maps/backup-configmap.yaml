@@ -20,6 +20,7 @@ data:
       freeze_by_part: true
       skip_tables:
         - system.*
+      data_path: "/bitnami/clickhouse/data/data/"
     gcs:
       bucket: {{ .Values.backup.gcsBucket }}
       path: {{ .Values.backup.gcsPath }}
