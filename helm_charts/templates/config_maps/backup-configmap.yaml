@@ -20,6 +20,8 @@ data:
       freeze_by_part: true
       skip_tables:
         - system.*
+        - default.blob_storage_file_log
+
     gcs:
       bucket: {{ .Values.backup.gcsBucket }}
       path: {{ .Values.backup.gcsPath }}
