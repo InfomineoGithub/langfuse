@@ -10,13 +10,13 @@ data:
       remote_storage: gcs
       disable_progress_bar: true
     clickhouse:
-      username: "$CLICKHOUSE_USER"
-      password: "$CLICKHOUSE_PASSWORD"
-      host: "$CLICKHOUSE_HOST"
-      port: $CLICKHOUSE_PORT
+      username: "{{ .Values.clickhouse.auth.username }}"
+      password: "{{ .Values.clickhouse.auth.password }}"
+      host: "localhost"
+      port: "9000"
       cluster_name: "default" 
-      cluster_username: "$CLICKHOUSE_USER"
-      cluster_password: "$CLICKHOUSE_PASSWORD"
+      cluster_username: "{{ .Values.clickhouse.auth.username }}"
+      cluster_password: "{{ .Values.clickhouse.auth.password }}"
       freeze_by_part: true
       skip_tables:
         - system.*
