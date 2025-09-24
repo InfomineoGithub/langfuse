@@ -1,0 +1,21 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.clickhouse.fullnameOverride }}-gcs-config
+  namespace: chatbot
+data:
+  storage-gcs.xml: |
+    <yandex>
+      <storage_configuration>
+        <disks>
+          <gcs_backups>
+            <type>gcs</type>
+            <bucket>{{ .Values.backup.gcsBucket }}</bucket>
+            <key_file>/etc/clickhouse-server/gcs-credentials/backup-sa-key.json</key_file>
+            <path>{{ .Values.backup.gcsPath }}/</path>
+          </gcs_backups>
+        </disks>
+      </storage_configuration>
+    </yandex>
+{{- end }}
