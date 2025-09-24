@@ -1,9 +1,9 @@
 dependencies:
 - name: clickhouse
   repository: oci://registry-1.docker.io/bitnamicharts
-  version: 9.4.4
+  version: 9.0.0
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
   version: 2.31.4
-digest: sha256:150ce833dcd04297e0b84edd86dfa1e50988778b8407566245106153d47f084c
-generated: "2025-09-24T16:23:05.4353318+03:00"
+digest: sha256:4478023d7206719655cdfc35e8093668224abc3fdee1e49038fd58ac2a4606ee
+generated: "2025-09-24T16:29:06.908251+03:00"

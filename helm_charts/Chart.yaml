@@ -11,7 +11,7 @@ keywords:
   - metrics
 dependencies:
   - name: clickhouse
-    version: 9.4.4
+    version: 9.0.0
     repository: oci://registry-1.docker.io/bitnamicharts
     condition: clickhouse.deploy
   # - name: valkey
