@@ -6,7 +6,7 @@ metadata:
   namespace: chatbot
 data:
   storage-gcs.xml: |
-    <yandex>
+    <clickhouse>
       <storage_configuration>
         <disks>
           <gcs_backups>
@@ -17,5 +17,5 @@ data:
           </gcs_backups>
         </disks>
       </storage_configuration>
-    </yandex>
+    </clickhouse>
 {{- end }}
