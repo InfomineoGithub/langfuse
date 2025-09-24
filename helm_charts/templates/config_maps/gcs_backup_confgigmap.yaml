@@ -10,7 +10,7 @@ data:
       <storage_configuration>
         <disks>
           <gcs_backups>
-            <type>gcs</type>
+            <type>s3</type>
             <bucket>{{ .Values.backup.gcsBucket }}</bucket>
             <key_file>/etc/clickhouse-server/backup-sa-key.json</key_file>
             <path>{{ .Values.backup.gcsPath }}/</path>
