@@ -12,7 +12,7 @@ data:
           <gcs_backups>
             <type>gcs</type>
             <bucket>{{ .Values.backup.gcsBucket }}</bucket>
-            <key_file>/etc/clickhouse-server/gcs-credentials/backup-sa-key.json</key_file>
+            <key_file>/etc/clickhouse-server/backup-sa-key.json</key_file>
             <path>{{ .Values.backup.gcsPath }}/</path>
           </gcs_backups>
         </disks>
