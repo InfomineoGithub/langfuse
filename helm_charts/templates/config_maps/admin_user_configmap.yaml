@@ -1,0 +1,24 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.clickhouse.fullnameOverride }}-user-config
+  namespace: chatbot
+data:
+data:
+  default-user.xml: |
+    <yandex>
+      <users>
+        <default>
+          <password>{{ .Values.clickhouse.auth.password }}</password>
+
+          <networks>
+            <ip>::/0</ip>
+          </networks>
+
+          <profile>default</profile>
+          <quota>default</quota>
+        </default>
+      </users>
+    </yandex>
+{{- end }}
