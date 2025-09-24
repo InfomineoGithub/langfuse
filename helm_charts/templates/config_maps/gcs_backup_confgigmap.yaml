@@ -9,13 +9,24 @@ data:
     <clickhouse>
       <storage_configuration>
         <disks>
-          <gcs_backups>
+          <backups>
             <type>s3</type>
-            <bucket>{{ .Values.backup.gcsBucket }}</bucket>
-            <key_file>/etc/clickhouse-server/backup-sa-key.json</key_file>
-            <path>{{ .Values.backup.gcsPath }}/</path>
-          </gcs_backups>
+            <endpoint>https://storage.googleapis.com/{{ .Values.backup.gcsBucket }}/{{ .Values.backup.gcsPath }}/</endpoint>
+            <access_key_id from_env="ACCESS_KEY_ID"/>
+            <secret_access_key from_env="SECRET_ACCESS_KEY"/>
+            <support_batch_delete>false</support_batch_delete>
+            <metadata_path>/var/lib/clickhouse/disks/backups/</metadata_path>
+          </backups>
         </disks>
+        <policies>
+          <backups_policy>
+            <volumes>
+              <main>
+                <disk>backups</disk>
+              </main>
+            </volumes>
+          </backups_policy>
+        </policies>
       </storage_configuration>
     </clickhouse>
 {{- end }}
