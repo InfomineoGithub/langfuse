@@ -11,6 +11,7 @@ data:
         <disks>
           <backups>
             <type>s3</type>
+            <allowed_disk>backups</allowed_disk>
             <endpoint>https://storage.googleapis.com/{{ .Values.backup.gcsBucket }}/{{ .Values.backup.gcsPath }}/</endpoint>
             <access_key_id from_env="ACCESS_KEY_ID"/>
             <secret_access_key from_env="SECRET_ACCESS_KEY"/>
