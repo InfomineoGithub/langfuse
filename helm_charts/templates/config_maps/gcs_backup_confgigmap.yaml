@@ -15,7 +15,6 @@ data:
             <access_key_id from_env="ACCESS_KEY_ID"/>
             <secret_access_key from_env="SECRET_ACCESS_KEY"/>
             <support_batch_delete>false</support_batch_delete>
-            <metadata_path>/var/lib/clickhouse/disks/backups/</metadata_path>
           </backups>
         </disks>
         <policies>
