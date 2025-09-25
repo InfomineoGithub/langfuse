@@ -5,7 +5,7 @@ metadata:
   name: {{ .Values.clickhouse.fullnameOverride }}-backup
   namespace: {{ .Values.namespace }}
 spec:
-  # Weekly at midnight Saturday
+  # Run weekly at midnight Saturday
   schedule: "0 0 * * 6"
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
@@ -13,22 +13,13 @@ spec:
     spec:
       template:
         spec:
+          serviceAccountName: {{ .Values.clickhouse.fullnameOverride }}-backup-sa
           restartPolicy: OnFailure
           containers:
-            - name: clickhouse-backup
-              image: alexakulov/clickhouse-backup:latest
+            - name: clickhouse-backup-runner
+              image: bitnami/kubectl:latest
               imagePullPolicy: IfNotPresent
-              command: ["/bin/sh", "-c"]
-              args:
-                - |
-                  apk add --no-cache gettext && \
-                  envsubst < /etc/clickhouse-backup/config.yml > /tmp/config.yml && \
-                  clickhouse-backup --config /tmp/config.yml create_remote weekly-$(date +%Y%m%d-%H%M)
               env:
-                - name: CLICKHOUSE_HOST
-                  value: {{ .Values.clickhouse.fullnameOverride }}
-                - name: CLICKHOUSE_PORT
-                  value: "9000"
                 - name: CLICKHOUSE_USER
                   valueFrom:
                     secretKeyRef:
@@ -39,19 +30,15 @@ spec:
                     secretKeyRef:
                       name: my-clickhouse-secret
                       key: password
-              volumeMounts:
-                - name: gcs-credentials
-                  mountPath: /etc/clickhouse-backup/backup-sa-key.json
-                  subPath: backup-sa-key.json
-                  readOnly: true
-                - name: backup-config
-                  mountPath: /etc/clickhouse-backup/config.yml
-                  subPath: config.yml
-          volumes:
-            - name: gcs-credentials
-              secret:
-                secretName: {{ .Values.backup.gcsSecretName }}
-            - name: backup-config
-              configMap:
-                name: {{ .Values.clickhouse.fullnameOverride }}-backup-config
+                - name: CLICKHOUSE_NAMESPACE
+                  value: {{ .Values.namespace }}
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -e
+                  echo ">>> Running ClickHouse backup..."
+                  kubectl exec -n "$CLICKHOUSE_NAMESPACE" {{ .Values.clickhouse.fullnameOverride }}-shard0-0 \
+                    -- clickhouse-client -u "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+                    --query="BACKUP DATABASE default ON CLUSTER default TO Disk('backups', 'backup_$(date +%Y%m%d)_cluster_automated')"
+                  echo ">>> Backup completed"
 {{- end }}

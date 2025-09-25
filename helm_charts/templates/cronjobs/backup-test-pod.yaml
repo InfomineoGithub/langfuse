@@ -1,0 +1,16 @@
+{{- if .Values.backup.test_enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.clickhouse.fullnameOverride }}-backup-test
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceAccountName: {{ .Values.clickhouse.fullnameOverride }}-backup-sa
+  restartPolicy: Never
+  containers:
+    - name: clickhouse-backup-trigger
+      image: europe-west1-docker.pkg.dev/brain-staging-450115/clickhouse-analytics/clickhouse-analytics:latest
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh"]
+      args: ["-c", "sleep infinity"]
+{{- end }}

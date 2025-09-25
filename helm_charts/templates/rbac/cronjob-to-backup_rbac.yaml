@@ -1,0 +1,34 @@
+{{- if .Values.backup.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.clickhouse.fullnameOverride }}-backup-role
+  namespace: {{ .Values.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  # Restrict this role to only the specific ClickHouse pods
+  resourceNames:
+    # This targets the first pod of the first shard, which is enough
+    # for the backup tool to coordinate with the other shards.
+    - {{ .Values.clickhouse.fullnameOverride }}-shard0-0
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.clickhouse.fullnameOverride }}-backup-rb
+  namespace: {{ .Values.namespace }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.clickhouse.fullnameOverride }}-backup-sa
+roleRef:
+  kind: Role
+  name: {{ .Values.clickhouse.fullnameOverride }}-backup-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
