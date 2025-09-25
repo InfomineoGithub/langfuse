@@ -29,8 +29,6 @@ data:
       </storage_configuration>
       <backups>
         <allowed_disk>backups</allowed_disk>
-        <!-- optional: <allowed_path>/</allowed_path> -->
       </backups>
-
     </clickhouse>
 {{- end }}

@@ -11,7 +11,7 @@ rules:
   resourceNames:
     # This targets the first pod of the first shard, which is enough
     # for the backup tool to coordinate with the other shards.
-    - {{ .Values.clickhouse.fullnameOverride }}-0-0
+    - {{ .Values.clickhouse.fullnameOverride }}-shard0-0
   verbs: ["create"]
 - apiGroups: [""]
   resources: ["pods"]
