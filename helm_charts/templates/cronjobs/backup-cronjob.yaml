@@ -17,7 +17,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: clickhouse-backup-runner
-              image: debian:stable-slim
+              image: bitnami/kubectl:latest
               imagePullPolicy: IfNotPresent
               env:
                 - name: CLICKHOUSE_USER
@@ -36,16 +36,9 @@ spec:
               args:
                 - |
                   set -e
-                  echo ">>> Installing kubectl"
-                  KVER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-                  curl -LO "https://dl.k8s.io/release/${KVER}/bin/linux/amd64/kubectl"
-                  chmod +x kubectl
-                  mv kubectl /usr/local/bin/kubectl
-
                   echo ">>> Running ClickHouse backup..."
                   kubectl exec -n "$CLICKHOUSE_NAMESPACE" {{ .Values.clickhouse.fullnameOverride }}-shard0-0 \
                     -- clickhouse-client -u "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
                     --query="BACKUP DATABASE default ON CLUSTER default TO Disk('backups', 'backup_$(date +%Y%m%d)_cluster')"
-
                   echo ">>> Backup completed"
 {{- end }}
