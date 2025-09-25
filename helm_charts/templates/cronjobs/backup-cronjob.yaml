@@ -39,6 +39,6 @@ spec:
                   echo ">>> Running ClickHouse backup..."
                   kubectl exec -n "$CLICKHOUSE_NAMESPACE" {{ .Values.clickhouse.fullnameOverride }}-shard0-0 \
                     -- clickhouse-client -u "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
-                    --query="BACKUP DATABASE default ON CLUSTER default TO Disk('backups', 'backup_$(date +%Y%m%d)_cluster')"
+                    --query="BACKUP DATABASE default ON CLUSTER default TO Disk('backups', 'backup_$(date +%Y%m%d)_cluster_automated')"
                   echo ">>> Backup completed"
 {{- end }}
