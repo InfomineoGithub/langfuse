@@ -1,4 +1,3 @@
-# templates/backup-cronjob.yaml
 {{- if .Values.backup.enabled }}
 apiVersion: batch/v1
 kind: CronJob
@@ -6,7 +5,7 @@ metadata:
   name: {{ .Values.clickhouse.fullnameOverride }}-backup
   namespace: {{ .Values.namespace }}
 spec:
-  # Weekly at midnight Saturday
+  # Run weekly at midnight Saturday
   schedule: "0 0 * * 6"
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
@@ -14,21 +13,39 @@ spec:
     spec:
       template:
         spec:
-          # Use the ServiceAccount we created above
           serviceAccountName: {{ .Values.clickhouse.fullnameOverride }}-backup-sa
           restartPolicy: OnFailure
           containers:
-          - name: clickhouse-backup-trigger
-            # An image that includes kubectl
-            image: bitnami/kubectl:latest
-            imagePullPolicy: IfNotPresent
-            command: ["/bin/sh", "-c"]
-            args:
-            - |
-              echo "Triggering ClickHouse backup in pod {{ .Values.clickhouse.fullnameOverride }}-shard0-0..."
-              kubectl exec "{{ .Values.clickhouse.fullnameOverride }}-shard0-0" \
-                --namespace {{ .Values.namespace }} \
-                -c clickhouse-backup -- /bin/sh -c \
-                'clickhouse-backup --config /tmp/config.yml create_remote weekly-$(date +%Y%m%d-%H%M)'
-              echo "Backup trigger command finished."
+            - name: clickhouse-backup-runner
+              image: debian:stable-slim
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: CLICKHOUSE_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: my-clickhouse-secret
+                      key: username
+                - name: CLICKHOUSE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: my-clickhouse-secret
+                      key: password
+                - name: CLICKHOUSE_NAMESPACE
+                  value: {{ .Values.namespace }}
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -e
+                  echo ">>> Installing kubectl"
+                  KVER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+                  curl -LO "https://dl.k8s.io/release/${KVER}/bin/linux/amd64/kubectl"
+                  chmod +x kubectl
+                  mv kubectl /usr/local/bin/kubectl
+
+                  echo ">>> Running ClickHouse backup..."
+                  kubectl exec -n "$CLICKHOUSE_NAMESPACE" {{ .Values.clickhouse.fullnameOverride }}-shard0-0 \
+                    -- clickhouse-client -u "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" \
+                    --query="BACKUP DATABASE default ON CLUSTER default TO Disk('backups', 'backup_$(date +%Y%m%d)_cluster')"
+
+                  echo ">>> Backup completed"
 {{- end }}

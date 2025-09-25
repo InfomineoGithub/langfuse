@@ -1,4 +1,4 @@
-{{- if .Values.backup.enabled }}
+{{- if .Values.backup.test_enabled }}
 apiVersion: v1
 kind: Pod
 metadata:
