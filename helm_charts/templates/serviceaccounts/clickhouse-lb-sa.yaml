@@ -1,0 +1,11 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: clickhouse-lb-sa
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: clickhouse-lb
+  annotations:
+    iam.gke.io/gcp-service-account: {{ .Values.clickhouse.lb.gcpServiceAccount }}
+{{- end }}
