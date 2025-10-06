@@ -9,7 +9,7 @@ spec:
   restartPolicy: Never
   containers:
     - name: clickhouse-backup-trigger
-      image: europe-west1-docker.pkg.dev/brain-staging-450115/clickhouse-analytics/clickhouse-analytics:latest
+      image: bitnami/kubectl:latest
       imagePullPolicy: IfNotPresent
       command: ["/bin/sh"]
       args: ["-c", "sleep infinity"]

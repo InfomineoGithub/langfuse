@@ -5,11 +5,11 @@ metadata:
   namespace: argocd
   annotations:
     argocd-image-updater.argoproj.io/image-list: |
-      langfuse-web=europe-west1-docker.pkg.dev/brain-staging-450115/brain-langfuse-web/langfuse:latest
-      langfuse-worker=europe-west1-docker.pkg.dev/brain-staging-450115/brain-langfuse-worker/langfuse-worker:latest
+        langfuse-web=europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-web/langfuse:latest
+        langfuse-worker=europe-west1-docker.pkg.dev/brain-prod-450115/brain-langfuse-worker/langfuse-worker:latest
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd-image-updater.argoproj.io/write-back-method: git
-    argocd-image-updater.argoproj.io/git-branch: dev
+    argocd-image-updater.argoproj.io/git-branch: main
     argocd-image-updater.argoproj.io/langfuse-web.update-strategy: digest
     argocd-image-updater.argoproj.io/langfuse-web.helm.image-name: "chatDashboard.image.repository"
     argocd-image-updater.argoproj.io/langfuse-web.helm.image-tag: "chatDashboard.image.tag"
@@ -23,7 +23,7 @@ spec:
   project: default
   source:
     repoURL: git@github.com:InfomineoGithub/langfuse.git
-    targetRevision: dev
+    targetRevision: main
     path: helm_charts
     helm:
       valueFiles:

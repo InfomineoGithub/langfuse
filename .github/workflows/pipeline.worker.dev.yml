@@ -2,7 +2,8 @@ name: Staging - Build and Publish Langfuse worker Docker Images
 
 on:
   push:
-    branches: [ 'dev' ]
+    branches: 
+      - dev
     paths:
       - 'worker/**'
 
