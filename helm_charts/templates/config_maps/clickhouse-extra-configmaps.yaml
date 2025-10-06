@@ -25,19 +25,25 @@ data:
                 <privateKeyFile>/tmp/certs/tls.key</privateKeyFile>
                 <dhParamsFile>/etc/clickhouse-server/config.d/dhparam.pem</dhParamsFile>
 
+                <!-- Disable CA loading since we don't need client verification -->
+                <loadDefaultCAFile>false</loadDefaultCAFile>
+
+                <!-- Don’t verify clients -->
                 <verificationMode>none</verificationMode>
 
+                <!-- Security hardening -->
                 <disableProtocols>sslv2,sslv3,tlsv1,tlsv1_1</disableProtocols>
                 <preferServerCiphers>true</preferServerCiphers>
             </server>
         </openSSL>
 
+        <!-- Enable SSL only for MySQL interface -->
         <mysql_port_ssl>9006</mysql_port_ssl>
 
+        <!-- Disable other SSL interfaces -->
         <https_port>0</https_port>
         <tcp_port_ssl>0</tcp_port_ssl>
     </clickhouse>
-
   storage-gcs.xml: |
     <clickhouse>
       <storage_configuration>
