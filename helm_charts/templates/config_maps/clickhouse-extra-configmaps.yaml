@@ -23,7 +23,7 @@ data:
             <server>
                 <certificateFile>/tmp/certs/tls.crt</certificateFile>
                 <privateKeyFile>/tmp/certs/tls.key</privateKeyFile>
-                <dhParamsFile>/etc/clickhouse-server/config.d/dhparam.pem</dhParamsFile>
+                <dhParamsFile>/tmp/pem/dhparam.pem</dhParamsFile>
 
                 <!-- Disable CA loading since we don't need client verification -->
                 <loadDefaultCAFile>false</loadDefaultCAFile>
