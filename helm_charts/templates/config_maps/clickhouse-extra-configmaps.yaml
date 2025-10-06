@@ -18,23 +18,25 @@ data:
     -----END DH PARAMETERS-----
 
   secure-ports.xml: |
-    <yandex>
+    <clickhouse>
         <openSSL>
             <server>
                 <certificateFile>/tmp/certs/tls.crt</certificateFile>
                 <privateKeyFile>/tmp/certs/tls.key</privateKeyFile>
                 <dhParamsFile>/etc/clickhouse-server/config.d/dhparam.pem</dhParamsFile>
+
                 <verificationMode>none</verificationMode>
-                <loadDefaultCAFile>true</loadDefaultCAFile>
-                <cacheSessions>true</cacheSessions>
+
                 <disableProtocols>sslv2,sslv3,tlsv1,tlsv1_1</disableProtocols>
                 <preferServerCiphers>true</preferServerCiphers>
             </server>
         </openSSL>
+
         <mysql_port_ssl>9006</mysql_port_ssl>
+
         <https_port>0</https_port>
         <tcp_port_ssl>0</tcp_port_ssl>
-    </yandex>
+    </clickhouse>
 
   storage-gcs.xml: |
     <clickhouse>
