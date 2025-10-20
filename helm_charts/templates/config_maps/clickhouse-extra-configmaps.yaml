@@ -5,44 +5,6 @@ metadata:
   name: {{ .Values.clickhouse.fullnameOverride }}-extra-configs
   namespace: {{ .Values.namespace }}
 data:
-  dhparam.pem: |
-    # Paste the entire content of your dhparam.pem file here
-    # It starts with -----BEGIN DH PARAMETERS-----
-    -----BEGIN DH PARAMETERS-----
-    MIIBCAKCAQEAnuJzt7KftC+FgYRVjAIENTfH70iBLl1WMhzrcG0rfibk1EmrFjSh
-    bovvv18TVjm7cCFYpVPUmi7U7IK8d4EK0AfQepCWQWmeAc482yk8qG6C1pDrew4n
-    zW7FnJlN82PPINuVm5BXRDsC49SLMMb7C/Cytzd/ULjztKBmF1J5IaCWBc9tlhTR
-    KOkJY347wVJ8htSOymeJtPOncIcECEDZaGE3n+Xzt2rfdLfRaqKLDq1Ce6rCu4ka
-    WvDOSE6kPu6JKFrvuHLopW1Nv/KAcEbNOgU51qoWisCgcOe+aq4YKwtqGmqoXkoR
-    96/UtH5od3oIdzbE6iOny8y9V9QP9ZPIfwIBAg==
-    -----END DH PARAMETERS-----
-
-  secure-ports.xml: |
-    <clickhouse>
-        <openSSL>
-            <server>
-                <certificateFile>/tmp/certs/tls.crt</certificateFile>
-                <privateKeyFile>/tmp/certs/tls.key</privateKeyFile>
-
-                <!-- Disable CA loading since we don't need client verification -->
-                <loadDefaultCAFile>false</loadDefaultCAFile>
-
-                <!-- Don’t verify clients -->
-                <verificationMode>none</verificationMode>
-
-                <!-- Security hardening -->
-                <disableProtocols>sslv2,sslv3,tlsv1,tlsv1_1</disableProtocols>
-                <preferServerCiphers>true</preferServerCiphers>
-            </server>
-        </openSSL>
-
-        <!-- Enable SSL only for MySQL interface -->
-        <mysql_port_ssl>9006</mysql_port_ssl>
-
-        <!-- Disable other SSL interfaces -->
-        <https_port>0</https_port>
-        <tcp_port_ssl>0</tcp_port_ssl>
-    </clickhouse>
   storage-gcs.xml: |
     <clickhouse>
       <storage_configuration>
