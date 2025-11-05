@@ -13,6 +13,7 @@ spec:
     spec:
       template:
         spec:
+          serviceAccountName: {{ .Values.clickhouse.fullnameOverride }}-backup-sa
           restartPolicy: OnFailure
           containers:
             - name: clickhouse-backup-runner
