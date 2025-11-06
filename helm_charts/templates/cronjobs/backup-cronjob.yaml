@@ -17,7 +17,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: clickhouse-backup-runner
-              image: bitnami/kubectl:latest
+              image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
               imagePullPolicy: IfNotPresent
               env:
                 - name: CLICKHOUSE_USER
